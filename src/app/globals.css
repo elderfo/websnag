@@ -19,4 +19,15 @@
 
   --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
   --font-mono: var(--font-geist-mono), ui-monospace, monospace;
+
+  --animate-highlight: highlight 1.5s ease-out;
+}
+
+@keyframes highlight {
+  0% {
+    background-color: color-mix(in srgb, var(--color-accent) 15%, transparent);
+  }
+  100% {
+    background-color: transparent;
+  }
 }

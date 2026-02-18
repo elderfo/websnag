@@ -3,6 +3,7 @@ import { notFound } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { Badge } from '@/components/ui/badge'
 import { CopyButton } from '@/components/ui/copy-button'
+import { RequestFeed } from '@/components/requests/request-feed'
 import type { Endpoint } from '@/types'
 
 interface EndpointDetailPageProps {
@@ -76,15 +77,8 @@ export default async function EndpointDetailPage({ params }: EndpointDetailPageP
       </div>
 
       <div className="mt-8">
-        <h2 className="text-lg font-semibold text-text-primary">Request Feed</h2>
-        <div className="mt-4 rounded-lg border border-dashed border-border p-8 text-center">
-          <p className="text-sm text-text-muted">
-            Incoming webhook requests will appear here in real-time.
-          </p>
-          <p className="mt-1 text-xs text-text-muted">
-            Send a request to your webhook URL to get started.
-          </p>
-        </div>
+        <h2 className="text-lg font-semibold text-text-primary mb-4">Request Feed</h2>
+        <RequestFeed endpointId={endpoint.id} endpointUrl={webhookUrl} />
       </div>
     </div>
   )
