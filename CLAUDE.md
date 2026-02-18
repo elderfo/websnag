@@ -100,8 +100,8 @@ websnag/
 
 # Supabase
 NEXT_PUBLIC_SUPABASE_URL=https://your-project.supabase.co
-NEXT_PUBLIC_SUPABASE_ANON_KEY=your-anon-key
-SUPABASE_SERVICE_ROLE_KEY=your-service-role-key  # Server-side only, never expose
+NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=sb_publishable_your-key  # Client-safe publishable key
+SUPABASE_SECRET_KEY=sb_secret_your-key  # Server-side only, never expose
 
 # Anthropic
 ANTHROPIC_API_KEY=sk-ant-...
@@ -224,8 +224,8 @@ CREATE POLICY "Users can view requests for own endpoints"
   ON requests FOR SELECT
   USING (endpoint_id IN (SELECT id FROM endpoints WHERE user_id = auth.uid()));
 
--- Requests INSERT uses service role key (from webhook capture API route), no RLS policy needed for insert.
--- Instead, grant insert to service_role and the webhook capture route uses the service role client.
+-- Requests INSERT uses secret key (from webhook capture API route), no RLS policy needed for insert.
+-- Instead, grant insert to service_role and the webhook capture route uses the admin client with the secret key.
 
 -- Usage: users see only their own
 CREATE POLICY "Users can view own usage"
@@ -313,7 +313,7 @@ const channel = supabase
 3. Check if the endpoint is active
 4. Look up the endpoint's owner and check usage limits
 5. Capture: method, headers, body (as raw text), query params, content-type, source IP, body size
-6. Insert into `requests` table using the **service role** client (bypasses RLS)
+6. Insert into `requests` table using the **admin** client with the secret key (bypasses RLS)
 7. Increment the user's request count
 8. Return the endpoint's configured response (status code, body, headers)
 9. If the user is Pro and auto-analysis is enabled, trigger AI analysis async (don't block the response)
@@ -593,7 +593,7 @@ curl -X POST http://localhost:3000/api/wh/YOUR_SLUG \
 
 ## Notes
 
-- The webhook capture route (`/api/wh/[slug]`) must use the Supabase **service role** client because the incoming request has no auth context — it's from an external service, not a logged-in user.
+- The webhook capture route (`/api/wh/[slug]`) must use the Supabase admin client with the **secret key** because the incoming request has no auth context — it's from an external service, not a logged-in user.
 - Supabase Realtime must be enabled on the `requests` table manually in the Supabase dashboard.
 - For local development, use `stripe listen --forward-to localhost:3000/api/stripe/webhook` to test Stripe webhooks.
 - Request body size limit: 1MB. Return 413 for larger payloads.
