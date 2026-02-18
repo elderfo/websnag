@@ -2,6 +2,7 @@ import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { Sidebar } from '@/components/layout/sidebar'
 import { Header } from '@/components/layout/header'
+import { MobileNav } from '@/components/layout/mobile-nav'
 import { LIMITS } from '@/types'
 import type { Plan } from '@/types'
 
@@ -35,10 +36,19 @@ export default async function DashboardLayout({ children }: { children: React.Re
 
   return (
     <div className="min-h-screen bg-background">
-      <Sidebar requestCount={requestCount} maxRequests={limits.maxRequestsPerMonth} />
-      <div className="pl-60">
-        <Header userEmail={user.email ?? ''} />
-        <main className="p-6">{children}</main>
+      {/* Desktop sidebar — hidden on mobile */}
+      <div className="hidden lg:block">
+        <Sidebar requestCount={requestCount} maxRequests={limits.maxRequestsPerMonth} />
+      </div>
+
+      <div className="lg:pl-60">
+        <Header
+          userEmail={user.email ?? ''}
+          mobileNav={
+            <MobileNav requestCount={requestCount} maxRequests={limits.maxRequestsPerMonth} />
+          }
+        />
+        <main className="p-4 sm:p-6">{children}</main>
       </div>
     </div>
   )

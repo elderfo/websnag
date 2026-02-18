@@ -52,4 +52,16 @@ describe('Header', () => {
       expect(mockPush).toHaveBeenCalledWith('/login')
     })
   })
+
+  it('renders the mobile logo', () => {
+    render(<Header userEmail="user@example.com" />)
+    expect(getFirst('websnag')).toBeInTheDocument()
+  })
+
+  it('renders mobile nav slot when provided', () => {
+    render(
+      <Header userEmail="user@example.com" mobileNav={<div data-testid="mobile-nav">mobile</div>} />
+    )
+    expect(screen.getByTestId('mobile-nav')).toBeInTheDocument()
+  })
 })
