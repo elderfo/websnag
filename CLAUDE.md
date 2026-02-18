@@ -20,7 +20,7 @@ Websnag is a micro-SaaS webhook testing and debugging tool. Users create private
 | Framework       | Next.js 14+ (App Router, TypeScript) | Full-stack application                    |
 | Styling         | Tailwind CSS                         | Utility-first CSS                         |
 | Database        | Supabase (PostgreSQL)                | Data storage, auth, realtime              |
-| Auth            | Supabase Auth                        | Google OAuth + magic link email           |
+| Auth            | Supabase Auth                        | GitHub OAuth + magic link email           |
 | Realtime        | Supabase Realtime                    | WebSocket push for new requests           |
 | AI              | Anthropic Claude API (Sonnet)        | Payload analysis and code generation      |
 | Payments        | Stripe                               | Checkout, Customer Portal, usage metering |
@@ -528,7 +528,7 @@ Follow this order. Each step should be fully working before moving to the next.
 
 1. **Project init:** `pnpm create next-app`, add Tailwind, configure TypeScript, set up path aliases, install dependencies (`@supabase/supabase-js`, `@supabase/ssr`, `stripe`, `@anthropic-ai/sdk`, `nanoid`, `zod`)
 2. **Supabase setup:** Create migration files, set up client/server Supabase helpers, auth middleware
-3. **Auth flow:** Login page, Google OAuth, magic link, callback handler, protected route middleware
+3. **Auth flow:** Login page, GitHub OAuth, magic link, callback handler, protected route middleware
 4. **Dashboard layout:** Sidebar, header, navigation shell (empty pages are fine)
 5. **Endpoint CRUD:** Create, list, edit, delete endpoints. Slug generation. Settings page.
 6. **Webhook capture route:** The critical `/api/wh/[slug]` handler. Test with cURL.
