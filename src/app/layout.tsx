@@ -13,8 +13,21 @@ const geistMono = Geist_Mono({
 })
 
 export const metadata: Metadata = {
-  title: 'Websnag',
-  description: 'See what your webhooks are really saying.',
+  title: 'Websnag — AI-Powered Webhook Debugger',
+  description:
+    'Capture, inspect, and analyze webhook payloads in real-time. AI-powered debugging for developers who ship fast.',
+  openGraph: {
+    title: 'Websnag — AI-Powered Webhook Debugger',
+    description: 'See what your webhooks are really saying.',
+    url: 'https://websnag.dev',
+    siteName: 'Websnag',
+    type: 'website',
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: 'Websnag — AI-Powered Webhook Debugger',
+    description: 'See what your webhooks are really saying.',
+  },
 }
 
 export default function RootLayout({
