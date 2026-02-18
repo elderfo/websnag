@@ -2,6 +2,12 @@
 CREATE OR REPLACE FUNCTION increment_request_count(p_user_id UUID)
 RETURNS void AS $$
 BEGIN
+  -- When called in authenticated context, caller can only modify their own usage.
+  -- Service role (auth.uid() IS NULL) can pass any user_id (needed by webhook capture route).
+  IF auth.uid() IS NOT NULL AND auth.uid() != p_user_id THEN
+    RAISE EXCEPTION 'permission denied: cannot modify another user''s usage';
+  END IF;
+
   INSERT INTO usage (user_id, month, request_count)
   VALUES (p_user_id, to_char(now(), 'YYYY-MM'), 1)
   ON CONFLICT (user_id, month)
@@ -13,6 +19,10 @@ $$ LANGUAGE plpgsql SECURITY DEFINER;
 CREATE OR REPLACE FUNCTION increment_ai_analysis_count(p_user_id UUID)
 RETURNS void AS $$
 BEGIN
+  IF auth.uid() IS NOT NULL AND auth.uid() != p_user_id THEN
+    RAISE EXCEPTION 'permission denied: cannot modify another user''s usage';
+  END IF;
+
   INSERT INTO usage (user_id, month, ai_analysis_count)
   VALUES (p_user_id, to_char(now(), 'YYYY-MM'), 1)
   ON CONFLICT (user_id, month)
@@ -24,6 +34,10 @@ $$ LANGUAGE plpgsql SECURITY DEFINER;
 CREATE OR REPLACE FUNCTION get_current_usage(p_user_id UUID)
 RETURNS TABLE (request_count INT, ai_analysis_count INT) AS $$
 BEGIN
+  IF auth.uid() IS NOT NULL AND auth.uid() != p_user_id THEN
+    RAISE EXCEPTION 'permission denied: cannot read another user''s usage';
+  END IF;
+
   RETURN QUERY
   SELECT COALESCE(u.request_count, 0), COALESCE(u.ai_analysis_count, 0)
   FROM usage u
