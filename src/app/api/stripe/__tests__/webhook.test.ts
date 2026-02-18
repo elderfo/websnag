@@ -85,7 +85,7 @@ describe('POST /api/stripe/webhook', () => {
     })
 
     mockSubscriptionsRetrieve.mockResolvedValue({
-      current_period_end: 1700000000,
+      items: { data: [{ current_period_end: 1700000000 }] },
     })
 
     const res = await POST(makeRequest('{}'))
@@ -113,7 +113,7 @@ describe('POST /api/stripe/webhook', () => {
           customer: 'cus_123',
           status: 'active',
           cancel_at_period_end: false,
-          current_period_end: 1700000000,
+          items: { data: [{ current_period_end: 1700000000 }] },
         },
       },
     })
@@ -138,7 +138,7 @@ describe('POST /api/stripe/webhook', () => {
           customer: 'cus_123',
           status: 'active',
           cancel_at_period_end: true,
-          current_period_end: 1700000000,
+          items: { data: [{ current_period_end: 1700000000 }] },
         },
       },
     })
@@ -163,7 +163,7 @@ describe('POST /api/stripe/webhook', () => {
           customer: 'cus_123',
           status: 'canceled',
           cancel_at_period_end: false,
-          current_period_end: 1700000000,
+          items: { data: [{ current_period_end: 1700000000 }] },
         },
       },
     })

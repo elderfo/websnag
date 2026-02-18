@@ -35,7 +35,10 @@ export async function POST(req: Request) {
       let periodEnd: string | null = null
       if (subscriptionId) {
         const sub = await stripe.subscriptions.retrieve(subscriptionId)
-        periodEnd = new Date(sub.current_period_end * 1000).toISOString()
+        const firstItem = sub.items.data[0]
+        if (firstItem) {
+          periodEnd = new Date(firstItem.current_period_end * 1000).toISOString()
+        }
       }
 
       await supabase
@@ -61,7 +64,10 @@ export async function POST(req: Request) {
       if (!customerId) break
 
       const isActive = subscription.status === 'active' || subscription.status === 'trialing'
-      const periodEnd = new Date(subscription.current_period_end * 1000).toISOString()
+      const firstItem = subscription.items.data[0]
+      const periodEnd = firstItem
+        ? new Date(firstItem.current_period_end * 1000).toISOString()
+        : null
 
       // If canceled at period end, keep as 'pro' until period ends
       if (subscription.cancel_at_period_end) {
