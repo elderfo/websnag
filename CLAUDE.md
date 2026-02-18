@@ -301,7 +301,7 @@ const channel = supabase
       // Prepend to the request list in state
     }
   )
-  .subscribe();
+  .subscribe()
 ```
 
 ## Critical Path: Webhook Capture Route
@@ -325,19 +325,19 @@ const channel = supabase
 ```typescript
 // Handler must support all methods
 export async function GET(req, { params }) {
-  return handleWebhook(req, params);
+  return handleWebhook(req, params)
 }
 export async function POST(req, { params }) {
-  return handleWebhook(req, params);
+  return handleWebhook(req, params)
 }
 export async function PUT(req, { params }) {
-  return handleWebhook(req, params);
+  return handleWebhook(req, params)
 }
 export async function PATCH(req, { params }) {
-  return handleWebhook(req, params);
+  return handleWebhook(req, params)
 }
 export async function DELETE(req, { params }) {
-  return handleWebhook(req, params);
+  return handleWebhook(req, params)
 }
 ```
 
@@ -361,7 +361,7 @@ Respond ONLY with valid JSON, no markdown fences, no preamble:
   "schema_notes": "Any missing, unusual, or notable fields compared to typical payloads from this source. Say 'Looks standard' if nothing unusual.",
   "handler_node": "// Complete Express.js route handler (10-20 lines)",
   "handler_python": "# Complete Flask route handler (10-20 lines)"
-}`;
+}`
 
 const userMessage = `Analyze this webhook request:
 
@@ -372,7 +372,7 @@ Headers:
 ${JSON.stringify(headers, null, 2)}
 
 Body:
-${body}`;
+${body}`
 ```
 
 ### API Route: `/api/analyze`
@@ -417,8 +417,8 @@ async function isProUser(userId: string): Promise<boolean> {
     .from('subscriptions')
     .select('plan, status')
     .eq('user_id', userId)
-    .single();
-  return data?.plan === 'pro' && data?.status === 'active';
+    .single()
+  return data?.plan === 'pro' && data?.status === 'active'
 }
 ```
 
@@ -440,7 +440,7 @@ const LIMITS = {
     historyRetentionDays: 30,
     customSlugs: true,
   },
-} as const;
+} as const
 ```
 
 ## Slug Generation
@@ -449,8 +449,8 @@ const LIMITS = {
 - **Pro users:** Can choose a custom slug when creating an endpoint. Validate: 3-48 chars, lowercase alphanumeric + hyphens, no leading/trailing hyphens. Fall back to random if not specified.
 
 ```typescript
-import { nanoid } from 'nanoid';
-const generateSlug = () => nanoid(12);
+import { nanoid } from 'nanoid'
+const generateSlug = () => nanoid(12)
 ```
 
 ## Replay Feature
