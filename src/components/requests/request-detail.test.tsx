@@ -34,12 +34,13 @@ describe('RequestDetail', () => {
     expect(screen.getByText('from 192.168.1.1')).toBeInTheDocument()
   })
 
-  it('renders all four tabs', () => {
+  it('renders all five tabs', () => {
     render(<RequestDetail request={mockRequest} endpointUrl={endpointUrl} />)
     expect(screen.getByRole('tab', { name: 'Body' })).toBeInTheDocument()
     expect(screen.getByRole('tab', { name: 'Headers' })).toBeInTheDocument()
     expect(screen.getByRole('tab', { name: 'Query Params' })).toBeInTheDocument()
     expect(screen.getByRole('tab', { name: 'Analysis' })).toBeInTheDocument()
+    expect(screen.getByRole('tab', { name: 'Replay' })).toBeInTheDocument()
   })
 
   it('shows body tab by default with formatted JSON', () => {
@@ -124,5 +125,15 @@ describe('RequestDetail', () => {
     const rawBody = { ...mockRequest, body: 'plain text body' }
     render(<RequestDetail request={rawBody} endpointUrl={endpointUrl} />)
     expect(screen.getByText('plain text body')).toBeInTheDocument()
+  })
+
+  it('switches to replay tab and shows replay panel', async () => {
+    const user = userEvent.setup()
+    render(<RequestDetail request={mockRequest} endpointUrl={endpointUrl} />)
+
+    await user.click(screen.getByRole('tab', { name: 'Replay' }))
+
+    expect(screen.getByLabelText('Target URL')).toBeInTheDocument()
+    expect(screen.getByText('PRO')).toBeInTheDocument()
   })
 })

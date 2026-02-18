@@ -6,10 +6,11 @@ import { Button } from '@/components/ui/button'
 import { AnalysisDisplay } from '@/components/analysis/analysis-display'
 import { CodeSnippet } from '@/components/analysis/code-snippet'
 import { MethodBadge } from './method-badge'
+import { ReplayPanel } from './replay-panel'
 import { formatBytes, formatJson, isJsonString, generateCurlCommand, timeAgo } from '@/lib/format'
 import type { WebhookRequest, AiAnalysis } from '@/types'
 
-type Tab = 'body' | 'headers' | 'query' | 'analysis'
+type Tab = 'body' | 'headers' | 'query' | 'analysis' | 'replay'
 
 interface RequestDetailProps {
   request: WebhookRequest
@@ -29,6 +30,7 @@ export function RequestDetail({ request: initialRequest, endpointUrl }: RequestD
     { id: 'headers', label: 'Headers' },
     { id: 'query', label: 'Query Params' },
     { id: 'analysis', label: 'Analysis' },
+    { id: 'replay', label: 'Replay' },
   ]
 
   const curlCommand = generateCurlCommand(request, endpointUrl)
@@ -73,6 +75,7 @@ export function RequestDetail({ request: initialRequest, endpointUrl }: RequestD
         {activeTab === 'analysis' && (
           <AnalysisTab request={request} onAnalysisComplete={handleAnalysisComplete} />
         )}
+        {activeTab === 'replay' && <ReplayPanel requestId={request.id} />}
       </div>
     </div>
   )
