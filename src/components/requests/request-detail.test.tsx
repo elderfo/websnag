@@ -88,7 +88,7 @@ describe('RequestDetail', () => {
     await user.click(screen.getByRole('tab', { name: 'Analysis' }))
 
     expect(screen.getByText('Analyze with AI')).toBeInTheDocument()
-    expect(screen.getByText('Coming soon')).toBeInTheDocument()
+    expect(screen.getByText('Use AI to analyze this webhook payload')).toBeInTheDocument()
   })
 
   it('shows analysis results when analyzed', async () => {

@@ -3,9 +3,11 @@
 import { useState } from 'react'
 import { CopyButton } from '@/components/ui/copy-button'
 import { Button } from '@/components/ui/button'
+import { AnalysisDisplay } from '@/components/analysis/analysis-display'
+import { CodeSnippet } from '@/components/analysis/code-snippet'
 import { MethodBadge } from './method-badge'
 import { formatBytes, formatJson, isJsonString, generateCurlCommand, timeAgo } from '@/lib/format'
-import type { WebhookRequest } from '@/types'
+import type { WebhookRequest, AiAnalysis } from '@/types'
 
 type Tab = 'body' | 'headers' | 'query' | 'analysis'
 
@@ -14,8 +16,13 @@ interface RequestDetailProps {
   endpointUrl: string
 }
 
-export function RequestDetail({ request, endpointUrl }: RequestDetailProps) {
+export function RequestDetail({ request: initialRequest, endpointUrl }: RequestDetailProps) {
+  const [request, setRequest] = useState(initialRequest)
   const [activeTab, setActiveTab] = useState<Tab>('body')
+
+  const handleAnalysisComplete = (analysis: AiAnalysis) => {
+    setRequest((prev) => ({ ...prev, ai_analysis: analysis }))
+  }
 
   const tabs: { id: Tab; label: string }[] = [
     { id: 'body', label: 'Body' },
@@ -63,7 +70,9 @@ export function RequestDetail({ request, endpointUrl }: RequestDetailProps) {
         {activeTab === 'body' && <BodyTab request={request} curlCommand={curlCommand} />}
         {activeTab === 'headers' && <HeadersTab headers={request.headers} />}
         {activeTab === 'query' && <QueryTab params={request.query_params} />}
-        {activeTab === 'analysis' && <AnalysisTab request={request} />}
+        {activeTab === 'analysis' && (
+          <AnalysisTab request={request} onAnalysisComplete={handleAnalysisComplete} />
+        )}
       </div>
     </div>
   )
@@ -178,18 +187,54 @@ function QueryTab({ params }: { params: Record<string, string> }) {
   )
 }
 
-function AnalysisTab({ request }: { request: WebhookRequest }) {
+function AnalysisTab({
+  request,
+  onAnalysisComplete,
+}: {
+  request: WebhookRequest
+  onAnalysisComplete: (analysis: AiAnalysis) => void
+}) {
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  const handleAnalyze = async () => {
+    setLoading(true)
+    setError(null)
+
+    try {
+      const res = await fetch('/api/analyze', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ requestId: request.id }),
+      })
+
+      if (!res.ok) {
+        const data = await res.json()
+        if (res.status === 429) {
+          setError('Analysis limit reached — upgrade to Pro for unlimited AI analysis.')
+        } else {
+          setError(data.error || 'Analysis failed')
+        }
+        return
+      }
+
+      const analysis: AiAnalysis = await res.json()
+      onAnalysisComplete(analysis)
+    } catch {
+      setError('Failed to connect. Please try again.')
+    } finally {
+      setLoading(false)
+    }
+  }
+
   if (request.ai_analysis) {
-    const analysis = request.ai_analysis
     return (
-      <div className="space-y-4">
-        <div className="flex items-center gap-2">
-          <span className="inline-flex items-center rounded-md bg-accent/10 px-2 py-0.5 text-xs font-medium text-accent">
-            {analysis.source}
-          </span>
-          <span className="text-sm text-text-secondary">{analysis.webhook_type}</span>
-        </div>
-        <p className="text-sm text-text-primary">{analysis.summary}</p>
+      <div className="space-y-6">
+        <AnalysisDisplay analysis={request.ai_analysis} />
+        <CodeSnippet
+          handlerNode={request.ai_analysis.handler_node}
+          handlerPython={request.ai_analysis.handler_python}
+        />
       </div>
     )
   }
@@ -212,10 +257,10 @@ function AnalysisTab({ request }: { request: WebhookRequest }) {
         </svg>
       </div>
       <p className="text-sm text-text-secondary mb-3">Use AI to analyze this webhook payload</p>
-      <Button variant="secondary" size="sm" disabled>
-        Analyze with AI
+      <Button variant="secondary" size="sm" onClick={handleAnalyze} disabled={loading}>
+        {loading ? 'Analyzing...' : 'Analyze with AI'}
       </Button>
-      <p className="text-xs text-text-muted mt-2">Coming soon</p>
+      {error && <p className="text-xs text-red-400 mt-2">{error}</p>}
     </div>
   )
 }
