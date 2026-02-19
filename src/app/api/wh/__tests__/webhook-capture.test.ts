@@ -42,7 +42,11 @@ function createRequest(
     }
   }
 
-  const init: RequestInit = {
+  const init: {
+    method: string
+    headers: Record<string, string>
+    body?: string
+  } = {
     method,
     headers: options.headers ?? {},
   }
