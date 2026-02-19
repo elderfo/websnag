@@ -5,11 +5,13 @@ import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
+import { ProBadge } from '@/components/ui/pro-badge'
 import type { Endpoint } from '@/types'
 
 interface EndpointFormProps {
   mode: 'create' | 'edit'
   endpoint?: Endpoint
+  isPro?: boolean
 }
 
 interface FormErrors {
@@ -21,7 +23,7 @@ interface FormErrors {
   general?: string
 }
 
-export function EndpointForm({ mode, endpoint }: EndpointFormProps) {
+export function EndpointForm({ mode, endpoint, isPro = false }: EndpointFormProps) {
   const router = useRouter()
   const [submitting, setSubmitting] = useState(false)
   const [errors, setErrors] = useState<FormErrors>({})
@@ -134,15 +136,26 @@ export function EndpointForm({ mode, endpoint }: EndpointFormProps) {
         rows={2}
       />
 
-      <Input
-        label="Custom Slug (Pro)"
-        placeholder="my-custom-slug"
-        value={slug}
-        onChange={(e) => setSlug(e.target.value)}
-        error={errors.slug}
-      />
+      <div className="space-y-1.5">
+        <div className="flex items-center gap-2">
+          <label htmlFor="custom-slug" className="block text-sm font-medium text-text-secondary">
+            Custom Slug
+          </label>
+          <ProBadge />
+        </div>
+        <Input
+          id="custom-slug"
+          placeholder={isPro ? 'my-custom-slug' : 'Upgrade to Pro for custom slugs'}
+          value={slug}
+          onChange={(e) => setSlug(e.target.value)}
+          error={errors.slug}
+          disabled={!isPro}
+        />
+      </div>
       <p className="-mt-3 text-xs text-text-muted">
-        Leave empty for an auto-generated slug. Custom slugs require a Pro plan.
+        {isPro
+          ? 'Leave empty for an auto-generated slug.'
+          : 'Upgrade to Pro for custom slugs. A random slug will be generated.'}
       </p>
 
       <Input
