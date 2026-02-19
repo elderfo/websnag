@@ -39,11 +39,16 @@ export async function POST(request: Request) {
 
   // Check user has a username set
   const admin = createAdminClient()
-  const { data: profile } = await admin
+  const { data: profile, error: profileError } = await admin
     .from('profiles')
     .select('username')
     .eq('id', user.id)
     .single()
+
+  if (profileError && profileError.code !== 'PGRST116') {
+    console.error('[endpoints] POST profile query error:', profileError)
+    return NextResponse.json({ error: 'Failed to fetch profile' }, { status: 500 })
+  }
 
   if (!profile?.username) {
     return NextResponse.json(
