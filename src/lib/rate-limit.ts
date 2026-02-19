@@ -16,6 +16,7 @@ let ipLimiter: Ratelimit | null = null
 function getRedis(): Redis | null {
   if (redis !== null) return redis
   if (!process.env.UPSTASH_REDIS_REST_URL || !process.env.UPSTASH_REDIS_REST_TOKEN) {
+    console.warn('[rate-limit] UPSTASH_REDIS_REST_URL or UPSTASH_REDIS_REST_TOKEN not set — rate limiting is DISABLED')
     return null
   }
   try {
