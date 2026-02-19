@@ -305,8 +305,32 @@ describe('POST /api/endpoints', () => {
     expect(response.status).toBe(401)
   })
 
+  it('returns 400 when user has no username set', async () => {
+    mockGetUser.mockResolvedValue({ data: { user: { id: 'user-1' } } })
+
+    // Admin profile check returns no username
+    const adminProfileChain = createQueryChain({ data: null, error: { code: 'PGRST116' } })
+    mockAdminFrom.mockReturnValue(adminProfileChain)
+
+    const { POST } = await import('../route')
+    const request = new Request('http://localhost/api/endpoints', {
+      method: 'POST',
+      body: JSON.stringify({ name: 'Test' }),
+      headers: { 'Content-Type': 'application/json' },
+    })
+    const response = await POST(request)
+
+    expect(response.status).toBe(400)
+    const body = await response.json()
+    expect(body.error).toContain('username')
+  })
+
   it('returns 400 for invalid JSON body', async () => {
     mockGetUser.mockResolvedValue({ data: { user: { id: 'user-1' } } })
+
+    // Admin profile check returns username (user has one set)
+    const adminProfileChain = createQueryChain({ data: { username: 'user1' }, error: null })
+    mockAdminFrom.mockReturnValue(adminProfileChain)
 
     const { POST } = await import('../route')
     const request = new Request('http://localhost/api/endpoints', {
@@ -324,6 +348,9 @@ describe('POST /api/endpoints', () => {
   it('returns 400 for missing name', async () => {
     mockGetUser.mockResolvedValue({ data: { user: { id: 'user-1' } } })
 
+    const adminProfileChain = createQueryChain({ data: { username: 'user1' }, error: null })
+    mockAdminFrom.mockReturnValue(adminProfileChain)
+
     const { POST } = await import('../route')
     const request = new Request('http://localhost/api/endpoints', {
       method: 'POST',
@@ -337,6 +364,10 @@ describe('POST /api/endpoints', () => {
 
   it('returns 403 when endpoint limit reached for free user', async () => {
     mockGetUser.mockResolvedValue({ data: { user: { id: 'user-1' } } })
+
+    // Admin: profile check returns username (user has one set)
+    const adminProfileChain = createQueryChain({ data: { username: 'user1' }, error: null })
+    mockAdminFrom.mockReturnValue(adminProfileChain)
 
     // Subscription query returns null (free user)
     const subChain = createQueryChain({ data: null, error: null })
@@ -366,6 +397,10 @@ describe('POST /api/endpoints', () => {
   it('returns 403 when free user tries custom slug', async () => {
     mockGetUser.mockResolvedValue({ data: { user: { id: 'user-1' } } })
 
+    // Admin: profile check returns username (first call), no slug check needed for free users
+    const adminProfileChain = createQueryChain({ data: { username: 'user1' }, error: null })
+    mockAdminFrom.mockReturnValue(adminProfileChain)
+
     const subChain = createQueryChain({ data: null, error: null })
     const countChain = createQueryChain({ data: null, error: null, count: 0 })
 
@@ -394,7 +429,15 @@ describe('POST /api/endpoints', () => {
 
     const subChain = createQueryChain({ data: { plan: 'pro', status: 'active' }, error: null })
     const countChain = createQueryChain({ data: null, error: null, count: 0 })
+    const adminProfileChain = createQueryChain({ data: { username: 'user1' }, error: null })
     const adminSlugChain = createQueryChain({ data: { id: 'existing-id' }, error: null })
+
+    let adminCallCount = 0
+    mockAdminFrom.mockImplementation(() => {
+      adminCallCount++
+      if (adminCallCount === 1) return adminProfileChain // profile check
+      return adminSlugChain // slug uniqueness check
+    })
 
     let callCount = 0
     mockFrom.mockImplementation(() => {
@@ -402,7 +445,6 @@ describe('POST /api/endpoints', () => {
       if (callCount === 1) return subChain
       return countChain
     })
-    mockAdminFrom.mockReturnValue(adminSlugChain)
 
     const { POST } = await import('../route')
     const request = new Request('http://localhost/api/endpoints', {
@@ -426,6 +468,10 @@ describe('POST /api/endpoints', () => {
     }
 
     mockGetUser.mockResolvedValue({ data: { user: { id: 'user-1' } } })
+
+    // Admin: profile check returns username
+    const adminProfileChain = createQueryChain({ data: { username: 'user1' }, error: null })
+    mockAdminFrom.mockReturnValue(adminProfileChain)
 
     const subChain = createQueryChain({ data: null, error: null })
     const countChain = createQueryChain({ data: null, error: null, count: 0 })
