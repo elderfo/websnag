@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { Button } from '@/components/ui/button'
+import { ProBadge } from '@/components/ui/pro-badge'
 import { isJsonString, formatJson } from '@/lib/format'
 
 interface ReplayResponse {
@@ -65,9 +66,7 @@ export function ReplayPanel({ requestId }: ReplayPanelProps) {
     <div className="space-y-4">
       <div className="flex items-center gap-2 mb-2">
         <h3 className="text-xs font-medium uppercase tracking-wider text-text-muted">Replay</h3>
-        <span className="inline-flex items-center rounded-full bg-accent/10 px-2 py-0.5 text-[10px] font-medium text-accent">
-          PRO
-        </span>
+        <ProBadge />
       </div>
 
       <p className="text-sm text-text-secondary">

@@ -4,6 +4,7 @@ import { EndpointForm } from '@/components/endpoints/endpoint-form'
 import { DeleteEndpointButton } from '@/components/endpoints/delete-endpoint-button'
 import { ToggleActiveButton } from '@/components/endpoints/toggle-active-button'
 import { Badge } from '@/components/ui/badge'
+import { getUserPlan } from '@/lib/usage'
 import type { Endpoint } from '@/types'
 
 interface EndpointSettingsPageProps {
@@ -21,6 +22,13 @@ export default async function EndpointSettingsPage({ params }: EndpointSettingsP
   }
 
   const endpoint = data as Endpoint
+
+  const { data: subscription } = await supabase
+    .from('subscriptions')
+    .select('plan, status')
+    .single()
+
+  const isPro = getUserPlan(subscription) === 'pro'
 
   return (
     <div>
@@ -46,7 +54,7 @@ export default async function EndpointSettingsPage({ params }: EndpointSettingsP
         <section>
           <h2 className="text-lg font-semibold text-text-primary">Edit Endpoint</h2>
           <div className="mt-3">
-            <EndpointForm mode="edit" endpoint={endpoint} />
+            <EndpointForm mode="edit" endpoint={endpoint} isPro={isPro} />
           </div>
         </section>
 

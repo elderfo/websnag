@@ -20,7 +20,7 @@ Websnag is a micro-SaaS webhook testing and debugging tool. Users create private
 | Framework       | Next.js 14+ (App Router, TypeScript) | Full-stack application                    |
 | Styling         | Tailwind CSS                         | Utility-first CSS                         |
 | Database        | Supabase (PostgreSQL)                | Data storage, auth, realtime              |
-| Auth            | Supabase Auth                        | Google OAuth + magic link email           |
+| Auth            | Supabase Auth                        | GitHub OAuth + magic link email           |
 | Realtime        | Supabase Realtime                    | WebSocket push for new requests           |
 | AI              | Anthropic Claude API (Sonnet)        | Payload analysis and code generation      |
 | Payments        | Stripe                               | Checkout, Customer Portal, usage metering |
@@ -100,8 +100,8 @@ websnag/
 
 # Supabase
 NEXT_PUBLIC_SUPABASE_URL=https://your-project.supabase.co
-NEXT_PUBLIC_SUPABASE_ANON_KEY=your-anon-key
-SUPABASE_SERVICE_ROLE_KEY=your-service-role-key  # Server-side only, never expose
+NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=sb_publishable_your-key  # Client-safe publishable key
+SUPABASE_SECRET_KEY=sb_secret_your-key  # Server-side only, never expose
 
 # Anthropic
 ANTHROPIC_API_KEY=sk-ant-...
@@ -224,8 +224,8 @@ CREATE POLICY "Users can view requests for own endpoints"
   ON requests FOR SELECT
   USING (endpoint_id IN (SELECT id FROM endpoints WHERE user_id = auth.uid()));
 
--- Requests INSERT uses service role key (from webhook capture API route), no RLS policy needed for insert.
--- Instead, grant insert to service_role and the webhook capture route uses the service role client.
+-- Requests INSERT uses secret key (from webhook capture API route), no RLS policy needed for insert.
+-- Instead, grant insert to service_role and the webhook capture route uses the admin client with the secret key.
 
 -- Usage: users see only their own
 CREATE POLICY "Users can view own usage"
@@ -313,7 +313,7 @@ const channel = supabase
 3. Check if the endpoint is active
 4. Look up the endpoint's owner and check usage limits
 5. Capture: method, headers, body (as raw text), query params, content-type, source IP, body size
-6. Insert into `requests` table using the **service role** client (bypasses RLS)
+6. Insert into `requests` table using the **admin** client with the secret key (bypasses RLS)
 7. Increment the user's request count
 8. Return the endpoint's configured response (status code, body, headers)
 9. If the user is Pro and auto-analysis is enabled, trigger AI analysis async (don't block the response)
@@ -528,7 +528,7 @@ Follow this order. Each step should be fully working before moving to the next.
 
 1. **Project init:** `pnpm create next-app`, add Tailwind, configure TypeScript, set up path aliases, install dependencies (`@supabase/supabase-js`, `@supabase/ssr`, `stripe`, `@anthropic-ai/sdk`, `nanoid`, `zod`)
 2. **Supabase setup:** Create migration files, set up client/server Supabase helpers, auth middleware
-3. **Auth flow:** Login page, Google OAuth, magic link, callback handler, protected route middleware
+3. **Auth flow:** Login page, GitHub OAuth, magic link, callback handler, protected route middleware
 4. **Dashboard layout:** Sidebar, header, navigation shell (empty pages are fine)
 5. **Endpoint CRUD:** Create, list, edit, delete endpoints. Slug generation. Settings page.
 6. **Webhook capture route:** The critical `/api/wh/[slug]` handler. Test with cURL.
@@ -593,7 +593,7 @@ curl -X POST http://localhost:3000/api/wh/YOUR_SLUG \
 
 ## Notes
 
-- The webhook capture route (`/api/wh/[slug]`) must use the Supabase **service role** client because the incoming request has no auth context — it's from an external service, not a logged-in user.
+- The webhook capture route (`/api/wh/[slug]`) must use the Supabase admin client with the **secret key** because the incoming request has no auth context — it's from an external service, not a logged-in user.
 - Supabase Realtime must be enabled on the `requests` table manually in the Supabase dashboard.
 - For local development, use `stripe listen --forward-to localhost:3000/api/stripe/webhook` to test Stripe webhooks.
 - Request body size limit: 1MB. Return 413 for larger payloads.

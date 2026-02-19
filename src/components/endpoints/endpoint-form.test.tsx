@@ -47,9 +47,36 @@ describe('EndpointForm', () => {
     render(<EndpointForm mode="create" />)
     expect(screen.getByLabelText('Name')).toBeInTheDocument()
     expect(screen.getByLabelText('Description')).toBeInTheDocument()
-    expect(screen.getByLabelText('Custom Slug (Pro)')).toBeInTheDocument()
+    expect(screen.getByLabelText('Custom Slug')).toBeInTheDocument()
     expect(screen.getByLabelText('Response Code')).toBeInTheDocument()
     expect(screen.getByLabelText('Response Body')).toBeInTheDocument()
     expect(screen.getByLabelText('Response Headers (JSON)')).toBeInTheDocument()
+  })
+
+  it('renders PRO badge next to slug label', () => {
+    render(<EndpointForm mode="create" />)
+    expect(screen.getByText('PRO')).toBeInTheDocument()
+  })
+
+  it('disables slug field when isPro is false', () => {
+    render(<EndpointForm mode="create" isPro={false} />)
+    expect(screen.getByLabelText('Custom Slug')).toBeDisabled()
+  })
+
+  it('enables slug field when isPro is true', () => {
+    render(<EndpointForm mode="create" isPro />)
+    expect(screen.getByLabelText('Custom Slug')).toBeEnabled()
+  })
+
+  it('shows upgrade message when not pro', () => {
+    render(<EndpointForm mode="create" isPro={false} />)
+    expect(
+      screen.getByText('Upgrade to Pro for custom slugs. A random slug will be generated.')
+    ).toBeInTheDocument()
+  })
+
+  it('shows optional slug message when pro', () => {
+    render(<EndpointForm mode="create" isPro />)
+    expect(screen.getByText('Leave empty for an auto-generated slug.')).toBeInTheDocument()
   })
 })

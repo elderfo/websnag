@@ -39,9 +39,9 @@ describe('LoginForm', () => {
     expect(screen.getAllByText('Sign in to your account').length).toBeGreaterThan(0)
   })
 
-  it('renders Google OAuth button', () => {
+  it('renders GitHub OAuth button', () => {
     render(<LoginForm />)
-    expect(getButton(/continue with google/i)).toBeInTheDocument()
+    expect(getButton(/continue with github/i)).toBeInTheDocument()
   })
 
   it('renders email input and magic link button', () => {
@@ -50,13 +50,13 @@ describe('LoginForm', () => {
     expect(getButton(/send magic link/i)).toBeInTheDocument()
   })
 
-  it('calls signInWithOAuth when Google button is clicked', async () => {
+  it('calls signInWithOAuth when GitHub button is clicked', async () => {
     render(<LoginForm />)
-    fireEvent.click(getButton(/continue with google/i))
+    fireEvent.click(getButton(/continue with github/i))
 
     await waitFor(() => {
       expect(mockSignInWithOAuth).toHaveBeenCalledWith({
-        provider: 'google',
+        provider: 'github',
         options: {
           redirectTo: expect.stringContaining('/auth/callback'),
         },
@@ -94,13 +94,13 @@ describe('LoginForm', () => {
     })
   })
 
-  it('shows error message when Google OAuth fails', async () => {
+  it('shows error message when GitHub OAuth fails', async () => {
     mockSignInWithOAuth.mockResolvedValue({
       error: { message: 'OAuth provider error' },
     })
 
     render(<LoginForm />)
-    fireEvent.click(getButton(/continue with google/i))
+    fireEvent.click(getButton(/continue with github/i))
 
     await waitFor(() => {
       expect(screen.getAllByText('OAuth provider error').length).toBeGreaterThan(0)
