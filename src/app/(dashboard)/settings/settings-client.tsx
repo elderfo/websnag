@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { Badge } from '@/components/ui/badge'
@@ -8,6 +8,8 @@ import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import type { Plan } from '@/types'
+
+const USERNAME_REGEX = /^[a-z0-9][a-z0-9-]{1,30}[a-z0-9]$/
 
 interface SettingsClientProps {
   email: string
@@ -21,14 +23,66 @@ export function SettingsClient({ email, createdAt, plan, initialUsername }: Sett
   const [username, setUsername] = useState(initialUsername ?? '')
   const [savedUsername, setSavedUsername] = useState(initialUsername)
   const [usernameError, setUsernameError] = useState('')
+  const [usernameAvailable, setUsernameAvailable] = useState<boolean | null>(null)
+  const [usernameChecking, setUsernameChecking] = useState(false)
   const [usernameSaving, setUsernameSaving] = useState(false)
   const [usernameSuccess, setUsernameSuccess] = useState(false)
+  const checkAbortRef = useRef<AbortController | null>(null)
 
   async function handleSignOut() {
     const supabase = createClient()
     await supabase.auth.signOut()
     router.push('/login')
   }
+
+  // Debounced availability check
+  useEffect(() => {
+    setUsernameAvailable(null)
+    setUsernameError('')
+
+    if (username.length < 3 || !USERNAME_REGEX.test(username)) {
+      setUsernameChecking(false)
+      return
+    }
+
+    setUsernameChecking(true)
+
+    const timer = setTimeout(async () => {
+      // Cancel any in-flight check
+      checkAbortRef.current?.abort()
+      const controller = new AbortController()
+      checkAbortRef.current = controller
+
+      try {
+        const res = await fetch(`/api/username/check?username=${encodeURIComponent(username)}`, {
+          signal: controller.signal,
+        })
+        const data = await res.json()
+
+        if (controller.signal.aborted) return
+
+        if (data.available) {
+          setUsernameAvailable(true)
+          setUsernameError('')
+        } else {
+          setUsernameAvailable(false)
+          setUsernameError(data.reason ?? 'Username is not available')
+        }
+      } catch (err) {
+        if (err instanceof DOMException && err.name === 'AbortError') return
+        // Silently fail availability check — save will still validate server-side
+      } finally {
+        if (!controller.signal.aborted) {
+          setUsernameChecking(false)
+        }
+      }
+    }, 400)
+
+    return () => {
+      clearTimeout(timer)
+      setUsernameChecking(false)
+    }
+  }, [username])
 
   async function handleSaveUsername() {
     setUsernameError('')
@@ -90,22 +144,34 @@ export function SettingsClient({ email, createdAt, plan, initialUsername }: Sett
                   value={username}
                   onChange={(e) => {
                     setUsername(e.target.value.toLowerCase())
-                    setUsernameError('')
                     setUsernameSuccess(false)
                   }}
                   placeholder="your-username"
                   error={usernameError}
                   maxLength={32}
                 />
-                <p className="mt-1.5 text-xs text-text-muted">
-                  3-32 characters, lowercase letters, numbers, and hyphens. Cannot be changed once
-                  set.
-                </p>
+                <div className="mt-1.5 flex items-center gap-2">
+                  <p className="text-xs text-text-muted">
+                    3-32 characters, lowercase letters, numbers, and hyphens. Cannot be changed once
+                    set.
+                  </p>
+                </div>
+                {usernameChecking && username.length >= 3 && (
+                  <p className="mt-1 text-xs text-text-muted">Checking availability...</p>
+                )}
+                {usernameAvailable === true && !usernameChecking && (
+                  <p className="mt-1 text-xs text-green-400">Username is available</p>
+                )}
               </div>
               <Button
                 size="sm"
                 onClick={handleSaveUsername}
-                disabled={username.length < 3 || usernameSaving}
+                disabled={
+                  username.length < 3 ||
+                  usernameSaving ||
+                  usernameChecking ||
+                  usernameAvailable === false
+                }
               >
                 {usernameSaving ? 'Saving...' : 'Set Username'}
               </Button>

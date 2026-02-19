@@ -296,7 +296,7 @@ describe('POST /api/username', () => {
     expect(body.error).toBe('Invalid username format')
   })
 
-  it('returns 400 for blocked reserved username', async () => {
+  it('returns 409 for blocked reserved username — indistinguishable from taken', async () => {
     mockGetUser.mockResolvedValue({ data: { user: { id: 'user-1' } } })
 
     const { POST } = await import('../route')
@@ -307,12 +307,13 @@ describe('POST /api/username', () => {
     })
     const response = await POST(request)
 
-    expect(response.status).toBe(400)
+    expect(response.status).toBe(409)
     const body = await response.json()
-    expect(body.error).toBe('This username is not available')
+    // Must be indistinguishable from a genuinely taken username
+    expect(body.error).toBe('Username already taken')
   })
 
-  it('returns 400 for blocked username — case insensitive check', async () => {
+  it('returns 409 for blocked username — case insensitive check', async () => {
     mockGetUser.mockResolvedValue({ data: { user: { id: 'user-1' } } })
 
     const { POST } = await import('../route')
@@ -323,9 +324,9 @@ describe('POST /api/username', () => {
     })
     const response = await POST(request)
 
-    expect(response.status).toBe(400)
+    expect(response.status).toBe(409)
     const body = await response.json()
-    expect(body.error).toBe('This username is not available')
+    expect(body.error).toBe('Username already taken')
   })
 
   it('returns 403 when user already has a username (immutable)', async () => {

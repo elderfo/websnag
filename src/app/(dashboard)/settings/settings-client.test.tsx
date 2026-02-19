@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { SettingsClient } from './settings-client'
@@ -23,9 +23,51 @@ const defaultProps = {
   initialUsername: null,
 }
 
+/** Mock fetch that routes availability checks and saves separately */
+function mockFetchForUsername(opts?: {
+  checkAvailable?: boolean
+  checkReason?: string
+  saveOk?: boolean
+  saveBody?: Record<string, unknown>
+  saveError?: boolean
+}) {
+  const {
+    checkAvailable = true,
+    checkReason,
+    saveOk = true,
+    saveBody = { username: 'testuser' },
+    saveError = false,
+  } = opts ?? {}
+
+  return vi.fn().mockImplementation((url: string) => {
+    if (typeof url === 'string' && url.includes('/api/username/check')) {
+      return Promise.resolve({
+        ok: true,
+        json: async () =>
+          checkAvailable
+            ? { available: true }
+            : { available: false, reason: checkReason ?? 'Username is already taken' },
+      } as Response)
+    }
+    // POST /api/username
+    if (saveError) {
+      return Promise.reject(new Error('Network error'))
+    }
+    return Promise.resolve({
+      ok: saveOk,
+      json: async () => saveBody,
+    } as Response)
+  })
+}
+
 beforeEach(() => {
   vi.clearAllMocks()
-  global.fetch = vi.fn()
+  vi.useFakeTimers({ shouldAdvanceTime: true })
+  global.fetch = mockFetchForUsername()
+})
+
+afterEach(() => {
+  vi.useRealTimers()
 })
 
 describe('SettingsClient', () => {
@@ -51,6 +93,7 @@ describe('SettingsClient', () => {
   })
 
   it('navigates to billing page when clicking manage billing', async () => {
+    vi.useRealTimers()
     const user = userEvent.setup()
     render(<SettingsClient {...defaultProps} />)
     await user.click(screen.getByRole('button', { name: 'Manage Billing' }))
@@ -58,6 +101,7 @@ describe('SettingsClient', () => {
   })
 
   it('signs out and redirects to login', async () => {
+    vi.useRealTimers()
     const user = userEvent.setup()
     mockSignOut.mockResolvedValue({})
     render(<SettingsClient {...defaultProps} />)
@@ -92,29 +136,76 @@ describe('SettingsClient', () => {
       expect(button).toBeDisabled()
     })
 
-    it('enables button when username is 3+ characters', async () => {
-      const user = userEvent.setup()
-      render(<SettingsClient {...defaultProps} />)
-      await user.type(screen.getByPlaceholderText('your-username'), 'abc')
-      expect(screen.getByRole('button', { name: 'Set Username' })).toBeEnabled()
-    })
-
     it('lowercases input', async () => {
+      vi.useRealTimers()
       const user = userEvent.setup()
       render(<SettingsClient {...defaultProps} />)
       await user.type(screen.getByPlaceholderText('your-username'), 'MyUser')
       expect(screen.getByPlaceholderText('your-username')).toHaveValue('myuser')
     })
 
-    it('saves username and locks input on success', async () => {
+    it('checks availability after typing and shows available', async () => {
+      vi.useRealTimers()
+      global.fetch = mockFetchForUsername({ checkAvailable: true })
       const user = userEvent.setup()
-      vi.mocked(global.fetch).mockResolvedValue({
-        ok: true,
-        json: async () => ({ username: 'testuser' }),
-      } as Response)
-
       render(<SettingsClient {...defaultProps} />)
+
+      await user.type(screen.getByPlaceholderText('your-username'), 'freeuser')
+
+      await waitFor(() => {
+        expect(screen.getByText('Username is available')).toBeInTheDocument()
+      })
+    })
+
+    it('shows taken message when username is unavailable', async () => {
+      vi.useRealTimers()
+      global.fetch = mockFetchForUsername({
+        checkAvailable: false,
+        checkReason: 'Username is already taken',
+      })
+      const user = userEvent.setup()
+      render(<SettingsClient {...defaultProps} />)
+
+      await user.type(screen.getByPlaceholderText('your-username'), 'takenuser')
+
+      await waitFor(() => {
+        expect(screen.getByText('Username is already taken')).toBeInTheDocument()
+      })
+    })
+
+    it('disables save button when username is unavailable', async () => {
+      vi.useRealTimers()
+      global.fetch = mockFetchForUsername({
+        checkAvailable: false,
+        checkReason: 'Username is already taken',
+      })
+      const user = userEvent.setup()
+      render(<SettingsClient {...defaultProps} />)
+
+      await user.type(screen.getByPlaceholderText('your-username'), 'takenuser')
+
+      await waitFor(() => {
+        expect(screen.getByRole('button', { name: 'Set Username' })).toBeDisabled()
+      })
+    })
+
+    it('saves username and locks input on success', async () => {
+      vi.useRealTimers()
+      global.fetch = mockFetchForUsername({
+        checkAvailable: true,
+        saveOk: true,
+        saveBody: { username: 'testuser' },
+      })
+      const user = userEvent.setup()
+      render(<SettingsClient {...defaultProps} />)
+
       await user.type(screen.getByPlaceholderText('your-username'), 'testuser')
+
+      // Wait for availability check to resolve
+      await waitFor(() => {
+        expect(screen.getByText('Username is available')).toBeInTheDocument()
+      })
+
       await user.click(screen.getByRole('button', { name: 'Set Username' }))
 
       await waitFor(() => {
@@ -123,15 +214,22 @@ describe('SettingsClient', () => {
       expect(screen.queryByPlaceholderText('your-username')).not.toBeInTheDocument()
     })
 
-    it('shows error on API failure', async () => {
+    it('shows error on save API failure', async () => {
+      vi.useRealTimers()
+      global.fetch = mockFetchForUsername({
+        checkAvailable: true,
+        saveOk: false,
+        saveBody: { error: 'Username already taken' },
+      })
       const user = userEvent.setup()
-      vi.mocked(global.fetch).mockResolvedValue({
-        ok: false,
-        json: async () => ({ error: 'Username already taken' }),
-      } as Response)
-
       render(<SettingsClient {...defaultProps} />)
+
       await user.type(screen.getByPlaceholderText('your-username'), 'taken')
+
+      await waitFor(() => {
+        expect(screen.getByText('Username is available')).toBeInTheDocument()
+      })
+
       await user.click(screen.getByRole('button', { name: 'Set Username' }))
 
       await waitFor(() => {
@@ -139,12 +237,18 @@ describe('SettingsClient', () => {
       })
     })
 
-    it('shows error on network failure', async () => {
+    it('shows error on network failure during save', async () => {
+      vi.useRealTimers()
+      global.fetch = mockFetchForUsername({ checkAvailable: true, saveError: true })
       const user = userEvent.setup()
-      vi.mocked(global.fetch).mockRejectedValue(new Error('Network error'))
-
       render(<SettingsClient {...defaultProps} />)
+
       await user.type(screen.getByPlaceholderText('your-username'), 'testuser')
+
+      await waitFor(() => {
+        expect(screen.getByText('Username is available')).toBeInTheDocument()
+      })
+
       await user.click(screen.getByRole('button', { name: 'Set Username' }))
 
       await waitFor(() => {

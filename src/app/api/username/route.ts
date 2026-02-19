@@ -62,8 +62,9 @@ export async function POST(req: Request) {
 
     const { username } = parsed.data
 
+    // Blocked usernames return same response as "taken" — no information leak
     if (isBlockedUsername(username)) {
-      return NextResponse.json({ error: 'This username is not available' }, { status: 400 })
+      return NextResponse.json({ error: 'Username already taken' }, { status: 409 })
     }
 
     // Check if user already has a username — usernames are immutable once set
