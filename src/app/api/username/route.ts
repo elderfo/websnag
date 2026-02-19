@@ -66,8 +66,19 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'This username is not available' }, { status: 400 })
     }
 
-    // Check uniqueness via admin client (bypasses RLS to see all profiles)
+    // Check if user already has a username — usernames are immutable once set
     const admin = createAdminClient()
+    const { data: existingProfile } = await admin
+      .from('profiles')
+      .select('username')
+      .eq('id', user.id)
+      .single()
+
+    if (existingProfile?.username) {
+      return NextResponse.json({ error: 'Username cannot be changed once set' }, { status: 403 })
+    }
+
+    // Check uniqueness via admin client (bypasses RLS to see all profiles)
     const { data: existing } = await admin
       .from('profiles')
       .select('id')
