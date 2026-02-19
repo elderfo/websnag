@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { replayRequestSchema } from '@/lib/validators'
 import { getUserPlan } from '@/lib/usage'
+import { validateTargetUrl } from '@/lib/url-validator'
 import { NextResponse } from 'next/server'
 
 const REPLAY_TIMEOUT = 10_000 // 10 seconds
@@ -46,6 +47,12 @@ export async function POST(req: Request) {
     }
 
     const { requestId, targetUrl } = parsed.data
+
+    // SSRF protection: validate the target URL does not resolve to internal addresses
+    const validation = await validateTargetUrl(targetUrl)
+    if (!validation.safe) {
+      return NextResponse.json({ error: 'Target URL is not allowed' }, { status: 400 })
+    }
 
     // Verify user is Pro
     const { data: subscription } = await supabase

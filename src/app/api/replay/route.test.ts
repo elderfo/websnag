@@ -29,6 +29,11 @@ vi.mock('@/lib/usage', () => ({
   getUserPlan: vi.fn(),
 }))
 
+const mockValidateTargetUrl = vi.fn()
+vi.mock('@/lib/url-validator', () => ({
+  validateTargetUrl: (...args: unknown[]) => mockValidateTargetUrl(...args),
+}))
+
 import { POST } from './route'
 import { getUserPlan } from '@/lib/usage'
 
@@ -43,6 +48,8 @@ function makeRequest(body: object): Request {
 describe('POST /api/replay', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    // Default: URL validation passes
+    mockValidateTargetUrl.mockResolvedValue({ safe: true })
   })
 
   it('returns 401 when user is not authenticated', async () => {
@@ -297,5 +304,84 @@ describe('POST /api/replay', () => {
     expect(data.body).toContain('...[truncated]')
 
     vi.unstubAllGlobals()
+  })
+
+  describe('SSRF protection', () => {
+    it('returns 400 when targetUrl resolves to a private IP', async () => {
+      mockGetUser.mockResolvedValue({ data: { user: { id: 'user-1' } } })
+      mockValidateTargetUrl.mockResolvedValue({
+        safe: false,
+        reason: 'Target resolves to a private or reserved IP address',
+      })
+
+      const res = await POST(
+        makeRequest({
+          requestId: '550e8400-e29b-41d4-a716-446655440000',
+          targetUrl: 'http://10.0.0.1/internal',
+        })
+      )
+
+      expect(res.status).toBe(400)
+      const data = await res.json()
+      expect(data.error).toBe('Target URL is not allowed')
+    })
+
+    it('returns 400 when targetUrl is localhost', async () => {
+      mockGetUser.mockResolvedValue({ data: { user: { id: 'user-1' } } })
+      mockValidateTargetUrl.mockResolvedValue({
+        safe: false,
+        reason: 'Hostname "localhost" is not allowed',
+      })
+
+      const res = await POST(
+        makeRequest({
+          requestId: '550e8400-e29b-41d4-a716-446655440000',
+          targetUrl: 'http://localhost:8080/admin',
+        })
+      )
+
+      expect(res.status).toBe(400)
+      const data = await res.json()
+      expect(data.error).toBe('Target URL is not allowed')
+    })
+
+    it('returns 400 when targetUrl uses ftp:// scheme', async () => {
+      mockGetUser.mockResolvedValue({ data: { user: { id: 'user-1' } } })
+      mockValidateTargetUrl.mockResolvedValue({
+        safe: false,
+        reason: 'Scheme "ftp" is not allowed. Use http or https.',
+      })
+
+      const res = await POST(
+        makeRequest({
+          requestId: '550e8400-e29b-41d4-a716-446655440000',
+          targetUrl: 'ftp://evil.com/file',
+        })
+      )
+
+      expect(res.status).toBe(400)
+      const data = await res.json()
+      expect(data.error).toBe('Target URL is not allowed')
+    })
+
+    it('calls validateTargetUrl before checking Pro status', async () => {
+      mockGetUser.mockResolvedValue({ data: { user: { id: 'user-1' } } })
+      mockValidateTargetUrl.mockResolvedValue({
+        safe: false,
+        reason: 'Hostname "localhost" is not allowed',
+      })
+
+      const res = await POST(
+        makeRequest({
+          requestId: '550e8400-e29b-41d4-a716-446655440000',
+          targetUrl: 'http://localhost',
+        })
+      )
+
+      // Should return 400 from SSRF check, not 403 from Pro check
+      expect(res.status).toBe(400)
+      // The subscription query should NOT have been called
+      expect(mockSingle).not.toHaveBeenCalled()
+    })
   })
 })
