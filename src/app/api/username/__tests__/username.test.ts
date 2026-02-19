@@ -65,7 +65,7 @@ describe('GET /api/username', () => {
     expect(body.username).toBe('johndoe')
   })
 
-  it('returns null when no username is set', async () => {
+  it('returns null when no username is set (PGRST116 = no rows)', async () => {
     mockGetUser.mockResolvedValue({ data: { user: { id: 'user-1' } } })
 
     const chain = createChain({ data: null, error: { code: 'PGRST116' } })
@@ -77,6 +77,31 @@ describe('GET /api/username', () => {
     expect(response.status).toBe(200)
     const body = await response.json()
     expect(body.username).toBeNull()
+  })
+
+  it('returns 500 for unexpected DB errors (not PGRST116)', async () => {
+    mockGetUser.mockResolvedValue({ data: { user: { id: 'user-1' } } })
+
+    const chain = createChain({ data: null, error: { code: 'PGRST500', message: 'DB crash' } })
+    mockFrom.mockReturnValue(chain)
+
+    const { GET } = await import('../route')
+    const response = await GET()
+
+    expect(response.status).toBe(500)
+    const body = await response.json()
+    expect(body.error).toBe('Failed to fetch username')
+  })
+
+  it('returns 500 when an unexpected exception is thrown', async () => {
+    mockGetUser.mockRejectedValue(new Error('auth service down'))
+
+    const { GET } = await import('../route')
+    const response = await GET()
+
+    expect(response.status).toBe(500)
+    const body = await response.json()
+    expect(body.error).toBe('Internal server error')
   })
 })
 
@@ -163,6 +188,114 @@ describe('POST /api/username', () => {
     expect(body.error).toBe('Invalid username format')
   })
 
+  it('returns 400 for invalid username format — trailing hyphen', async () => {
+    mockGetUser.mockResolvedValue({ data: { user: { id: 'user-1' } } })
+
+    const { POST } = await import('../route')
+    const request = new Request('http://localhost/api/username', {
+      method: 'POST',
+      body: JSON.stringify({ username: 'johndoe-' }),
+      headers: { 'Content-Type': 'application/json' },
+    })
+    const response = await POST(request)
+
+    expect(response.status).toBe(400)
+    const body = await response.json()
+    expect(body.error).toBe('Invalid username format')
+  })
+
+  it('returns 400 for invalid username format — underscore', async () => {
+    mockGetUser.mockResolvedValue({ data: { user: { id: 'user-1' } } })
+
+    const { POST } = await import('../route')
+    const request = new Request('http://localhost/api/username', {
+      method: 'POST',
+      body: JSON.stringify({ username: 'john_doe' }),
+      headers: { 'Content-Type': 'application/json' },
+    })
+    const response = await POST(request)
+
+    expect(response.status).toBe(400)
+    const body = await response.json()
+    expect(body.error).toBe('Invalid username format')
+  })
+
+  it('returns 400 for invalid username format — unicode characters', async () => {
+    mockGetUser.mockResolvedValue({ data: { user: { id: 'user-1' } } })
+
+    const { POST } = await import('../route')
+    const request = new Request('http://localhost/api/username', {
+      method: 'POST',
+      body: JSON.stringify({ username: 'jöhndöe' }),
+      headers: { 'Content-Type': 'application/json' },
+    })
+    const response = await POST(request)
+
+    expect(response.status).toBe(400)
+    const body = await response.json()
+    expect(body.error).toBe('Invalid username format')
+  })
+
+  it('returns 400 for username with leading/trailing whitespace', async () => {
+    mockGetUser.mockResolvedValue({ data: { user: { id: 'user-1' } } })
+
+    const { POST } = await import('../route')
+    const request = new Request('http://localhost/api/username', {
+      method: 'POST',
+      body: JSON.stringify({ username: ' johndoe ' }),
+      headers: { 'Content-Type': 'application/json' },
+    })
+    const response = await POST(request)
+
+    expect(response.status).toBe(400)
+    const body = await response.json()
+    expect(body.error).toBe('Invalid username format')
+  })
+
+  it('accepts exactly 32 characters (max allowed)', async () => {
+    mockGetUser.mockResolvedValue({ data: { user: { id: 'user-1' } } })
+
+    const username32 = 'a'.repeat(32)
+
+    // Admin from: first call uniqueness check (no row), second upsert
+    let adminCallCount = 0
+    mockAdminFrom.mockImplementation(() => {
+      adminCallCount++
+      if (adminCallCount === 1) {
+        return createChain({ data: null, error: { code: 'PGRST116' } })
+      }
+      return createChain({ data: { id: 'user-1', username: username32 }, error: null })
+    })
+
+    const { POST } = await import('../route')
+    const request = new Request('http://localhost/api/username', {
+      method: 'POST',
+      body: JSON.stringify({ username: username32 }),
+      headers: { 'Content-Type': 'application/json' },
+    })
+    const response = await POST(request)
+
+    expect(response.status).toBe(200)
+    const body = await response.json()
+    expect(body.username).toBe(username32)
+  })
+
+  it('returns 400 for 33 characters (one over max)', async () => {
+    mockGetUser.mockResolvedValue({ data: { user: { id: 'user-1' } } })
+
+    const { POST } = await import('../route')
+    const request = new Request('http://localhost/api/username', {
+      method: 'POST',
+      body: JSON.stringify({ username: 'a'.repeat(33) }),
+      headers: { 'Content-Type': 'application/json' },
+    })
+    const response = await POST(request)
+
+    expect(response.status).toBe(400)
+    const body = await response.json()
+    expect(body.error).toBe('Invalid username format')
+  })
+
   it('returns 400 for blocked reserved username', async () => {
     mockGetUser.mockResolvedValue({ data: { user: { id: 'user-1' } } })
 
@@ -183,10 +316,6 @@ describe('POST /api/username', () => {
     mockGetUser.mockResolvedValue({ data: { user: { id: 'user-1' } } })
 
     const { POST } = await import('../route')
-    // 'admin' is blocked; we need a valid-format version that is also blocked
-    // 'admin' is 5 chars, but regex requires pattern ^[a-z0-9][a-z0-9-]{1,30}[a-z0-9]$
-    // 'admin' has 5 chars: a-d-m-i-n — "adm" matches [a-z0-9], "i" matches middle, "n" matches end... wait
-    // Actually 'admin' = 5 chars: start='a', middle='dmi', end='n' — that's 1+3+1=5, regex OK
     const request = new Request('http://localhost/api/username', {
       method: 'POST',
       body: JSON.stringify({ username: 'admin' }),
@@ -216,6 +345,62 @@ describe('POST /api/username', () => {
     expect(response.status).toBe(409)
     const body = await response.json()
     expect(body.error).toBe('Username already taken')
+  })
+
+  it('returns 409 when DB unique constraint fires (TOCTOU race — code 23505)', async () => {
+    mockGetUser.mockResolvedValue({ data: { user: { id: 'user-1' } } })
+
+    let adminCallCount = 0
+    mockAdminFrom.mockImplementation(() => {
+      adminCallCount++
+      if (adminCallCount === 1) {
+        // uniqueness SELECT passes (no race detected at read time)
+        return createChain({ data: null, error: { code: 'PGRST116' } })
+      }
+      // upsert hits the unique constraint
+      return createChain({ data: null, error: { code: '23505', message: 'duplicate key value' } })
+    })
+
+    const { POST } = await import('../route')
+    const request = new Request('http://localhost/api/username', {
+      method: 'POST',
+      body: JSON.stringify({ username: 'johndoe' }),
+      headers: { 'Content-Type': 'application/json' },
+    })
+    const response = await POST(request)
+
+    expect(response.status).toBe(409)
+    const body = await response.json()
+    // Must NOT leak the raw DB error message
+    expect(body.error).toBe('Username already taken')
+    expect(body.error).not.toContain('duplicate key value')
+  })
+
+  it('returns generic 500 (not raw DB message) for unexpected upsert errors', async () => {
+    mockGetUser.mockResolvedValue({ data: { user: { id: 'user-1' } } })
+
+    let adminCallCount = 0
+    mockAdminFrom.mockImplementation(() => {
+      adminCallCount++
+      if (adminCallCount === 1) {
+        return createChain({ data: null, error: { code: 'PGRST116' } })
+      }
+      return createChain({ data: null, error: { code: 'PGRST500', message: 'internal db error' } })
+    })
+
+    const { POST } = await import('../route')
+    const request = new Request('http://localhost/api/username', {
+      method: 'POST',
+      body: JSON.stringify({ username: 'johndoe' }),
+      headers: { 'Content-Type': 'application/json' },
+    })
+    const response = await POST(request)
+
+    expect(response.status).toBe(500)
+    const body = await response.json()
+    // Must return generic error, not raw DB message
+    expect(body.error).toBe('Failed to save username')
+    expect(body.error).not.toContain('internal db error')
   })
 
   it('succeeds with valid unique username', async () => {
@@ -271,5 +456,21 @@ describe('POST /api/username', () => {
     expect(response.status).toBe(200)
     const body = await response.json()
     expect(body.username).toBe('newhandle')
+  })
+
+  it('returns 500 when an unexpected exception is thrown', async () => {
+    mockGetUser.mockRejectedValue(new Error('auth service down'))
+
+    const { POST } = await import('../route')
+    const request = new Request('http://localhost/api/username', {
+      method: 'POST',
+      body: JSON.stringify({ username: 'johndoe' }),
+      headers: { 'Content-Type': 'application/json' },
+    })
+    const response = await POST(request)
+
+    expect(response.status).toBe(500)
+    const body = await response.json()
+    expect(body.error).toBe('Internal server error')
   })
 })
