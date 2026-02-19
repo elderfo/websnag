@@ -21,3 +21,25 @@ export const replayRequestSchema = z.object({
   requestId: z.string().uuid(),
   targetUrl: z.string().url(),
 })
+
+// Username: 3-32 chars, lowercase alphanumeric + hyphens, no leading/trailing hyphens
+// Regex: start with alnum, then 1-30 alnum-or-hyphen chars, end with alnum (enforces 3-32 total)
+export const usernameSchema = z
+  .string()
+  .min(3)
+  .max(32)
+  .regex(
+    /^[a-z0-9][a-z0-9-]{1,30}[a-z0-9]$/,
+    'Must be 3-32 chars, lowercase alphanumeric and hyphens, no leading/trailing hyphens'
+  )
+
+export const setUsernameSchema = z.object({
+  username: z
+    .string()
+    .min(3)
+    .max(32)
+    .regex(
+      /^[a-z0-9][a-z0-9-]{1,30}[a-z0-9]$/,
+      'Must be 3-32 chars, lowercase alphanumeric and hyphens, no leading/trailing hyphens'
+    ),
+})

@@ -91,12 +91,13 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
       )
     }
 
-    // Check slug uniqueness using admin client
+    // Check slug uniqueness per-user (slugs are namespaced under a user now)
     const adminClient = createAdminClient()
     const { data: existingSlug } = await adminClient
       .from('endpoints')
       .select('id')
       .eq('slug', parsed.data.slug)
+      .eq('user_id', user.id)
       .single()
 
     if (existingSlug) {

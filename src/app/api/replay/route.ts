@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { replayRequestSchema } from '@/lib/validators'
 import { getUserPlan } from '@/lib/usage'
+import { validateTargetUrl } from '@/lib/url-validator'
 import { NextResponse } from 'next/server'
 
 const REPLAY_TIMEOUT = 10_000 // 10 seconds
@@ -47,6 +48,15 @@ export async function POST(req: Request) {
 
     const { requestId, targetUrl } = parsed.data
 
+    // SSRF protection: validate the target URL does not resolve to internal addresses
+    const validation = await validateTargetUrl(targetUrl)
+    if (!validation.safe) {
+      return NextResponse.json(
+        { error: 'Target URL is not allowed', reason: validation.reason },
+        { status: 400 }
+      )
+    }
+
     // Verify user is Pro
     const { data: subscription } = await supabase
       .from('subscriptions')
@@ -78,16 +88,28 @@ export async function POST(req: Request) {
       }
     }
 
+    // Build the fetch URL using the resolved IP to prevent DNS rebinding TOCTOU attacks.
+    // Set the Host header to the original hostname so TLS/virtual hosting still works.
+    const originalUrl = new URL(targetUrl)
+    const fetchUrl = new URL(targetUrl)
+    if (validation.resolvedIp) {
+      // For IPv6 addresses, wrap in brackets for URL hostname
+      const isIPv6 = validation.resolvedIp.includes(':')
+      fetchUrl.hostname = isIPv6 ? `[${validation.resolvedIp}]` : validation.resolvedIp
+      forwardHeaders['Host'] = originalUrl.host
+    }
+
     // Replay the request with timeout
     const controller = new AbortController()
     const timeoutId = setTimeout(() => controller.abort(), REPLAY_TIMEOUT)
 
     try {
-      const response = await fetch(targetUrl, {
+      const response = await fetch(fetchUrl.toString(), {
         method: webhookRequest.method,
         headers: forwardHeaders,
         body: ['GET', 'HEAD'].includes(webhookRequest.method) ? undefined : webhookRequest.body,
         signal: controller.signal,
+        redirect: 'manual',
       })
 
       clearTimeout(timeoutId)
