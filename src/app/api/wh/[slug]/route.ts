@@ -1,5 +1,5 @@
 import { createAdminClient } from '@/lib/supabase/admin'
-import { checkSlugRateLimit, checkIpRateLimit } from '@/lib/rate-limit'
+import { checkSlugRateLimit, checkIpRateLimit, RateLimitResult } from '@/lib/rate-limit'
 import { getUserPlan, canReceiveRequest } from '@/lib/usage'
 import { NextRequest, NextResponse } from 'next/server'
 
@@ -8,7 +8,18 @@ const MAX_BODY_SIZE = 1_048_576 // 1MB
 type RouteContext = { params: Promise<{ slug: string }> }
 
 function getSourceIp(req: NextRequest): string {
-  return req.headers.get('x-forwarded-for') ?? req.headers.get('x-real-ip') ?? 'unknown'
+  const forwarded = req.headers.get('x-forwarded-for')
+  if (forwarded) {
+    return forwarded.split(',')[0].trim()
+  }
+  return req.headers.get('x-real-ip') ?? 'unknown'
+}
+
+function applyRateLimitHeaders(headers: Headers, rateLimitResult: RateLimitResult | null): void {
+  if (rateLimitResult) {
+    headers.set('X-RateLimit-Limit', String(rateLimitResult.limit))
+    headers.set('X-RateLimit-Remaining', String(rateLimitResult.remaining))
+  }
 }
 
 export async function handleWebhook(req: NextRequest, { params }: RouteContext) {
@@ -16,30 +27,29 @@ export async function handleWebhook(req: NextRequest, { params }: RouteContext) 
   const sourceIp = getSourceIp(req)
 
   // 1. Rate limiting checks — BEFORE any database queries
+  let primaryResult: RateLimitResult | null = null
+
   try {
     const [slugResult, ipResult] = await Promise.all([
       checkSlugRateLimit(slug),
-      checkIpRateLimit(sourceIp),
+      sourceIp !== 'unknown' ? checkIpRateLimit(sourceIp) : Promise.resolve(null),
     ])
 
-    // Determine the most restrictive rate limit info for headers
-    // Use slug result as primary (more specific), fall back to ip result
-    const primaryResult = slugResult ?? ipResult
+    // Prefer slug-based rate limit info (more specific), fall back to IP-based
+    primaryResult = slugResult ?? ipResult
 
     // Check slug rate limit
     if (slugResult && !slugResult.success) {
       const retryAfterMs = Math.max(0, slugResult.reset - Date.now())
       const retryAfterSecs = Math.ceil(retryAfterMs / 1000)
+      const rlHeaders = new Headers({
+        'Retry-After': String(retryAfterSecs),
+        'X-RateLimit-Limit': String(slugResult.limit),
+        'X-RateLimit-Remaining': String(slugResult.remaining),
+      })
       return NextResponse.json(
         { error: 'Rate limit exceeded' },
-        {
-          status: 429,
-          headers: {
-            'Retry-After': String(retryAfterSecs),
-            'X-RateLimit-Limit': String(slugResult.limit),
-            'X-RateLimit-Remaining': String(slugResult.remaining),
-          },
-        }
+        { status: 429, headers: rlHeaders }
       )
     }
 
@@ -47,24 +57,19 @@ export async function handleWebhook(req: NextRequest, { params }: RouteContext) 
     if (ipResult && !ipResult.success) {
       const retryAfterMs = Math.max(0, ipResult.reset - Date.now())
       const retryAfterSecs = Math.ceil(retryAfterMs / 1000)
+      const rlHeaders = new Headers({
+        'Retry-After': String(retryAfterSecs),
+        'X-RateLimit-Limit': String(ipResult.limit),
+        'X-RateLimit-Remaining': String(ipResult.remaining),
+      })
       return NextResponse.json(
         { error: 'Rate limit exceeded' },
-        {
-          status: 429,
-          headers: {
-            'Retry-After': String(retryAfterSecs),
-            'X-RateLimit-Limit': String(ipResult.limit),
-            'X-RateLimit-Remaining': String(ipResult.remaining),
-          },
-        }
+        { status: 429, headers: rlHeaders }
       )
     }
-
-    // Store primary result for attaching to success response
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    ;(req as any)._rateLimitResult = primaryResult
-  } catch {
+  } catch (error) {
     // Fail open: if rate limiting itself throws, allow the request
+    console.error('[webhook] Rate limiting check failed, allowing request:', error)
   }
 
   const supabase = createAdminClient()
@@ -77,17 +82,29 @@ export async function handleWebhook(req: NextRequest, { params }: RouteContext) 
     .single()
 
   if (endpointError || !endpoint) {
-    return NextResponse.json({ error: 'Not found' }, { status: 404 })
+    const notFoundHeaders = new Headers()
+    applyRateLimitHeaders(notFoundHeaders, primaryResult)
+    return NextResponse.json({ error: 'Not found' }, { status: 404, headers: notFoundHeaders })
   }
 
   if (!endpoint.is_active) {
-    return NextResponse.json({ error: 'Endpoint inactive' }, { status: 410 })
+    const inactiveHeaders = new Headers()
+    applyRateLimitHeaders(inactiveHeaders, primaryResult)
+    return NextResponse.json(
+      { error: 'Endpoint inactive' },
+      { status: 410, headers: inactiveHeaders }
+    )
   }
 
   // 3. Read body (must read before checking size)
   const body = await req.text()
   if (body.length > MAX_BODY_SIZE) {
-    return NextResponse.json({ error: 'Payload too large' }, { status: 413 })
+    const tooLargeHeaders = new Headers()
+    applyRateLimitHeaders(tooLargeHeaders, primaryResult)
+    return NextResponse.json(
+      { error: 'Payload too large' },
+      { status: 413, headers: tooLargeHeaders }
+    )
   }
 
   // 4. Check usage limits
@@ -106,7 +123,12 @@ export async function handleWebhook(req: NextRequest, { params }: RouteContext) 
   const currentRequests = usageData?.[0]?.request_count ?? 0
 
   if (!canReceiveRequest(currentRequests, plan)) {
-    return NextResponse.json({ error: 'Monthly request limit reached' }, { status: 429 })
+    const limitHeaders = new Headers()
+    applyRateLimitHeaders(limitHeaders, primaryResult)
+    return NextResponse.json(
+      { error: 'Monthly request limit reached' },
+      { status: 429, headers: limitHeaders }
+    )
   }
 
   // 5. Capture the request
@@ -114,7 +136,7 @@ export async function handleWebhook(req: NextRequest, { params }: RouteContext) 
   const queryParams = Object.fromEntries(req.nextUrl.searchParams.entries())
   const sizeBytes = body ? new TextEncoder().encode(body).length : 0
 
-  await supabase.from('requests').insert({
+  const { error: insertError } = await supabase.from('requests').insert({
     endpoint_id: endpoint.id,
     method: req.method,
     headers,
@@ -125,8 +147,18 @@ export async function handleWebhook(req: NextRequest, { params }: RouteContext) 
     size_bytes: sizeBytes,
   })
 
+  if (insertError) {
+    console.error('[webhook] Failed to insert request:', insertError)
+  }
+
   // 6. Increment usage counter
-  await supabase.rpc('increment_request_count', { p_user_id: endpoint.user_id })
+  const { error: rpcError } = await supabase.rpc('increment_request_count', {
+    p_user_id: endpoint.user_id,
+  })
+
+  if (rpcError) {
+    console.error('[webhook] Failed to increment request count:', rpcError)
+  }
 
   // 7. Return configured response
   const responseHeaders = new Headers()
@@ -139,12 +171,7 @@ export async function handleWebhook(req: NextRequest, { params }: RouteContext) 
   }
 
   // Attach rate limit headers to the success response when available
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const rateLimitResult = (req as any)._rateLimitResult
-  if (rateLimitResult) {
-    responseHeaders.set('X-RateLimit-Limit', String(rateLimitResult.limit))
-    responseHeaders.set('X-RateLimit-Remaining', String(rateLimitResult.remaining))
-  }
+  applyRateLimitHeaders(responseHeaders, primaryResult)
 
   return new NextResponse(endpoint.response_body, {
     status: endpoint.response_code,
