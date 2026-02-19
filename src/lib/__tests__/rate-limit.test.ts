@@ -1,11 +1,13 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 
 // Mock @upstash/redis before any imports that use it
+const mockFromEnv = vi.fn()
+
 vi.mock('@upstash/redis', () => {
   const mockRedisInstance = {}
   return {
     Redis: {
-      fromEnv: vi.fn(() => mockRedisInstance),
+      fromEnv: (...args: unknown[]) => mockFromEnv(...args) ?? mockRedisInstance,
     },
   }
 })
@@ -28,22 +30,32 @@ vi.mock('@upstash/ratelimit', () => {
   }
 })
 
-import { checkSlugRateLimit, checkIpRateLimit } from '../rate-limit'
+// Because the module uses lazy singletons, we must re-import after each test
+// that manipulates env vars so the singletons are freshly initialized.
+const originalEnv = process.env
+
+async function importRateLimit() {
+  const mod = await import('../rate-limit')
+  return mod
+}
 
 describe('checkSlugRateLimit', () => {
-  const originalEnv = process.env
-
   beforeEach(() => {
     vi.clearAllMocks()
+    vi.resetModules()
+    // Default: valid Redis env vars
     process.env = {
       ...originalEnv,
       UPSTASH_REDIS_REST_URL: 'https://test.upstash.io',
       UPSTASH_REDIS_REST_TOKEN: 'test-token',
     }
+    // Default: fromEnv returns a valid-ish object (the mock already does this, just reset)
+    mockFromEnv.mockReturnValue(undefined) // let the factory default kick in
   })
 
   afterEach(() => {
     process.env = originalEnv
+    vi.resetModules()
   })
 
   it('returns success result when under the limit', async () => {
@@ -54,6 +66,7 @@ describe('checkSlugRateLimit', () => {
       reset: Date.now() + 60_000,
     })
 
+    const { checkSlugRateLimit } = await importRateLimit()
     const result = await checkSlugRateLimit('my-slug')
 
     expect(result).not.toBeNull()
@@ -71,6 +84,7 @@ describe('checkSlugRateLimit', () => {
       reset: Date.now() + 30_000,
     })
 
+    const { checkSlugRateLimit } = await importRateLimit()
     const result = await checkSlugRateLimit('my-slug')
 
     expect(result).not.toBeNull()
@@ -83,6 +97,7 @@ describe('checkSlugRateLimit', () => {
     delete process.env.UPSTASH_REDIS_REST_URL
     delete process.env.UPSTASH_REDIS_REST_TOKEN
 
+    const { checkSlugRateLimit } = await importRateLimit()
     const result = await checkSlugRateLimit('my-slug')
 
     expect(result).toBeNull()
@@ -92,9 +107,22 @@ describe('checkSlugRateLimit', () => {
   it('returns null (fail open) when Redis throws an error', async () => {
     mockLimit.mockRejectedValueOnce(new Error('Redis connection failed'))
 
+    const { checkSlugRateLimit } = await importRateLimit()
     const result = await checkSlugRateLimit('my-slug')
 
     expect(result).toBeNull()
+  })
+
+  it('returns null (fail open) when Redis.fromEnv() throws', async () => {
+    mockFromEnv.mockImplementationOnce(() => {
+      throw new Error('Redis.fromEnv failed')
+    })
+
+    const { checkSlugRateLimit } = await importRateLimit()
+    const result = await checkSlugRateLimit('my-slug')
+
+    expect(result).toBeNull()
+    expect(mockLimit).not.toHaveBeenCalled()
   })
 
   it('returns correct reset timestamp', async () => {
@@ -106,26 +134,42 @@ describe('checkSlugRateLimit', () => {
       reset: futureReset,
     })
 
+    const { checkSlugRateLimit } = await importRateLimit()
     const result = await checkSlugRateLimit('my-slug')
 
     expect(result!.reset).toBe(futureReset)
   })
+
+  it('passes the slug as the rate limit key', async () => {
+    mockLimit.mockResolvedValueOnce({
+      success: true,
+      limit: 60,
+      remaining: 59,
+      reset: Date.now() + 60_000,
+    })
+
+    const { checkSlugRateLimit } = await importRateLimit()
+    await checkSlugRateLimit('specific-slug-key')
+
+    expect(mockLimit).toHaveBeenCalledWith('specific-slug-key')
+  })
 })
 
 describe('checkIpRateLimit', () => {
-  const originalEnv = process.env
-
   beforeEach(() => {
     vi.clearAllMocks()
+    vi.resetModules()
     process.env = {
       ...originalEnv,
       UPSTASH_REDIS_REST_URL: 'https://test.upstash.io',
       UPSTASH_REDIS_REST_TOKEN: 'test-token',
     }
+    mockFromEnv.mockReturnValue(undefined)
   })
 
   afterEach(() => {
     process.env = originalEnv
+    vi.resetModules()
   })
 
   it('returns success result when under the limit', async () => {
@@ -136,6 +180,7 @@ describe('checkIpRateLimit', () => {
       reset: Date.now() + 60_000,
     })
 
+    const { checkIpRateLimit } = await importRateLimit()
     const result = await checkIpRateLimit('1.2.3.4')
 
     expect(result).not.toBeNull()
@@ -152,6 +197,7 @@ describe('checkIpRateLimit', () => {
       reset: Date.now() + 15_000,
     })
 
+    const { checkIpRateLimit } = await importRateLimit()
     const result = await checkIpRateLimit('1.2.3.4')
 
     expect(result).not.toBeNull()
@@ -164,6 +210,7 @@ describe('checkIpRateLimit', () => {
     delete process.env.UPSTASH_REDIS_REST_URL
     delete process.env.UPSTASH_REDIS_REST_TOKEN
 
+    const { checkIpRateLimit } = await importRateLimit()
     const result = await checkIpRateLimit('1.2.3.4')
 
     expect(result).toBeNull()
@@ -173,8 +220,35 @@ describe('checkIpRateLimit', () => {
   it('returns null (fail open) when Redis throws an error', async () => {
     mockLimit.mockRejectedValueOnce(new Error('Redis connection failed'))
 
+    const { checkIpRateLimit } = await importRateLimit()
     const result = await checkIpRateLimit('1.2.3.4')
 
     expect(result).toBeNull()
+  })
+
+  it('returns null (fail open) when Redis.fromEnv() throws', async () => {
+    mockFromEnv.mockImplementationOnce(() => {
+      throw new Error('Redis.fromEnv failed')
+    })
+
+    const { checkIpRateLimit } = await importRateLimit()
+    const result = await checkIpRateLimit('1.2.3.4')
+
+    expect(result).toBeNull()
+    expect(mockLimit).not.toHaveBeenCalled()
+  })
+
+  it('passes the IP as the rate limit key', async () => {
+    mockLimit.mockResolvedValueOnce({
+      success: true,
+      limit: 200,
+      remaining: 199,
+      reset: Date.now() + 60_000,
+    })
+
+    const { checkIpRateLimit } = await importRateLimit()
+    await checkIpRateLimit('10.20.30.40')
+
+    expect(mockLimit).toHaveBeenCalledWith('10.20.30.40')
   })
 })
