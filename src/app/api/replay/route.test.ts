@@ -48,8 +48,8 @@ function makeRequest(body: object): Request {
 describe('POST /api/replay', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    // Default: URL validation passes
-    mockValidateTargetUrl.mockResolvedValue({ safe: true })
+    // Default: URL validation passes with a resolved IP
+    mockValidateTargetUrl.mockResolvedValue({ safe: true, resolvedIp: '93.184.216.34' })
   })
 
   it('returns 401 when user is not authenticated', async () => {
@@ -154,18 +154,18 @@ describe('POST /api/replay', () => {
     expect(data.body).toBe('{"ok":true}')
     expect(data.headers).toHaveProperty('content-type')
 
-    // Verify fetch was called with correct params
-    expect(mockFetch).toHaveBeenCalledWith(
-      'https://example.com/webhook',
-      expect.objectContaining({
-        method: 'POST',
-        body: '{"event":"test"}',
-      })
-    )
+    // Verify fetch was called with resolved IP instead of hostname
+    const fetchUrl = mockFetch.mock.calls[0][0]
+    expect(fetchUrl).toContain('93.184.216.34')
+    expect(mockFetch.mock.calls[0][1]).toMatchObject({
+      method: 'POST',
+      body: '{"event":"test"}',
+      redirect: 'manual',
+    })
 
-    // Verify host header was stripped
+    // Verify original host header was stripped but Host is set to original hostname
     const calledHeaders = mockFetch.mock.calls[0][1].headers
-    expect(calledHeaders).not.toHaveProperty('host')
+    expect(calledHeaders).toHaveProperty('Host', 'example.com')
     expect(calledHeaders).toHaveProperty('content-type', 'application/json')
     expect(calledHeaders).toHaveProperty('x-custom', 'test')
 
@@ -307,7 +307,7 @@ describe('POST /api/replay', () => {
   })
 
   describe('SSRF protection', () => {
-    it('returns 400 when targetUrl resolves to a private IP', async () => {
+    it('returns 400 with reason when targetUrl resolves to a private IP', async () => {
       mockGetUser.mockResolvedValue({ data: { user: { id: 'user-1' } } })
       mockValidateTargetUrl.mockResolvedValue({
         safe: false,
@@ -324,6 +324,7 @@ describe('POST /api/replay', () => {
       expect(res.status).toBe(400)
       const data = await res.json()
       expect(data.error).toBe('Target URL is not allowed')
+      expect(data.reason).toBe('Target resolves to a private or reserved IP address')
     })
 
     it('returns 400 when targetUrl is localhost', async () => {
@@ -382,6 +383,105 @@ describe('POST /api/replay', () => {
       expect(res.status).toBe(400)
       // The subscription query should NOT have been called
       expect(mockSingle).not.toHaveBeenCalled()
+    })
+
+    it('includes reason in error response for all SSRF failures', async () => {
+      mockGetUser.mockResolvedValue({ data: { user: { id: 'user-1' } } })
+      mockValidateTargetUrl.mockResolvedValue({
+        safe: false,
+        reason: 'Scheme "ftp" is not allowed. Use http or https.',
+      })
+
+      const res = await POST(
+        makeRequest({
+          requestId: '550e8400-e29b-41d4-a716-446655440000',
+          targetUrl: 'ftp://evil.com/file',
+        })
+      )
+
+      const data = await res.json()
+      expect(data.reason).toBe('Scheme "ftp" is not allowed. Use http or https.')
+    })
+
+    it('uses redirect: manual to prevent redirect-based SSRF bypass', async () => {
+      mockGetUser.mockResolvedValue({ data: { user: { id: 'user-1' } } })
+      mockValidateTargetUrl.mockResolvedValue({ safe: true, resolvedIp: '93.184.216.34' })
+      mockSingle.mockResolvedValueOnce({ data: { plan: 'pro', status: 'active' } })
+      mockSingle.mockResolvedValueOnce({
+        data: {
+          id: '550e8400-e29b-41d4-a716-446655440000',
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: '{"test":true}',
+          endpoint: { user_id: 'user-1' },
+        },
+      })
+      vi.mocked(getUserPlan).mockReturnValue('pro')
+
+      const mockFetch = vi.fn().mockResolvedValue({
+        status: 302,
+        text: () => Promise.resolve(''),
+        headers: new Headers({ location: 'http://169.254.169.254/latest/meta-data/' }),
+      })
+      vi.stubGlobal('fetch', mockFetch)
+
+      const res = await POST(
+        makeRequest({
+          requestId: '550e8400-e29b-41d4-a716-446655440000',
+          targetUrl: 'https://example.com/webhook',
+        })
+      )
+
+      // Verify redirect: 'manual' was passed to fetch
+      expect(mockFetch.mock.calls[0][1]).toHaveProperty('redirect', 'manual')
+
+      // Response should be returned as-is (302) rather than following redirect
+      const data = await res.json()
+      expect(data.status).toBe(302)
+      expect(data.headers).toHaveProperty('location')
+
+      vi.unstubAllGlobals()
+    })
+
+    it('uses resolved IP in fetch URL to prevent DNS rebinding', async () => {
+      mockGetUser.mockResolvedValue({ data: { user: { id: 'user-1' } } })
+      mockValidateTargetUrl.mockResolvedValue({ safe: true, resolvedIp: '93.184.216.34' })
+      mockSingle.mockResolvedValueOnce({ data: { plan: 'pro', status: 'active' } })
+      mockSingle.mockResolvedValueOnce({
+        data: {
+          id: '550e8400-e29b-41d4-a716-446655440000',
+          method: 'POST',
+          headers: {},
+          body: 'test',
+          endpoint: { user_id: 'user-1' },
+        },
+      })
+      vi.mocked(getUserPlan).mockReturnValue('pro')
+
+      const mockFetch = vi.fn().mockResolvedValue({
+        status: 200,
+        text: () => Promise.resolve('ok'),
+        headers: new Headers(),
+      })
+      vi.stubGlobal('fetch', mockFetch)
+
+      await POST(
+        makeRequest({
+          requestId: '550e8400-e29b-41d4-a716-446655440000',
+          targetUrl: 'https://example.com/webhook',
+        })
+      )
+
+      // Verify fetch was called with the resolved IP, not the hostname
+      const fetchUrl = mockFetch.mock.calls[0][0]
+      expect(fetchUrl).toContain('93.184.216.34')
+      expect(fetchUrl).not.toContain('example.com')
+
+      // Verify Host header is set to original hostname
+      const calledHeaders = mockFetch.mock.calls[0][1].headers
+      expect(calledHeaders['Host']).toBe('example.com')
+
+      vi.unstubAllGlobals()
     })
   })
 })
