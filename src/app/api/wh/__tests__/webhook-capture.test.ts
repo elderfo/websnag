@@ -14,6 +14,15 @@ vi.mock('@/lib/supabase/admin', () => ({
   createAdminClient: () => mockSupabase,
 }))
 
+// Mock the rate limit module
+const mockCheckSlugRateLimit = vi.fn()
+const mockCheckIpRateLimit = vi.fn()
+
+vi.mock('@/lib/rate-limit', () => ({
+  checkSlugRateLimit: (...args: unknown[]) => mockCheckSlugRateLimit(...args),
+  checkIpRateLimit: (...args: unknown[]) => mockCheckIpRateLimit(...args),
+}))
+
 // Import the handler after mocking — use the new [...segments] catch-all route
 import { handleWebhook } from '../[...segments]/route'
 
@@ -63,6 +72,24 @@ const mockEndpoint = {
   is_active: true,
   created_at: '2024-01-01T00:00:00Z',
   updated_at: '2024-01-01T00:00:00Z',
+}
+
+// Default passing rate limit result
+const passingRateLimit = {
+  success: true,
+  limit: 60,
+  remaining: 59,
+  reset: Date.now() + 60_000,
+}
+
+// Default failing rate limit result
+function failingRateLimit(limit: number, remaining = 0) {
+  return {
+    success: false,
+    limit,
+    remaining,
+    reset: Date.now() + 30_000,
+  }
 }
 
 // Setup chainable mock for from().select().eq().single() pattern
@@ -135,6 +162,10 @@ describe('handleWebhook (namespaced route /wh/[username]/[slug])', () => {
       }
       return Promise.resolve({ data: null, error: null })
     })
+
+    // Default: rate limits pass
+    mockCheckSlugRateLimit.mockResolvedValue(passingRateLimit)
+    mockCheckIpRateLimit.mockResolvedValue({ ...passingRateLimit, limit: 200 })
   })
 
   const params = Promise.resolve({ segments: ['johndoe', 'test-slug'] })
@@ -389,6 +420,49 @@ describe('handleWebhook (namespaced route /wh/[username]/[slug])', () => {
     expect(insertArg.source_ip).toBe('1.2.3.4')
   })
 
+  it('takes the first IP from a comma-separated x-forwarded-for header', async () => {
+    const req = createRequest('POST', {
+      body: '{}',
+      headers: { 'x-forwarded-for': '1.2.3.4, 5.6.7.8, 9.10.11.12' },
+    })
+
+    await handleWebhook(req, { params })
+
+    const insertArg = insertChain.insert.mock.calls[0][0]
+    expect(insertArg.source_ip).toBe('1.2.3.4')
+  })
+
+  it('falls back to x-real-ip when x-forwarded-for is absent', async () => {
+    const req = createRequest('POST', {
+      body: '{}',
+      headers: { 'x-real-ip': '9.8.7.6' },
+    })
+
+    await handleWebhook(req, { params })
+
+    const insertArg = insertChain.insert.mock.calls[0][0]
+    expect(insertArg.source_ip).toBe('9.8.7.6')
+  })
+
+  it('stores null source_ip when IP is unknown', async () => {
+    // No IP headers — source_ip should be null, not the string 'unknown'
+    const req = createRequest('POST', { body: '{}' })
+
+    await handleWebhook(req, { params })
+
+    const insertArg = insertChain.insert.mock.calls[0][0]
+    expect(insertArg.source_ip).toBeNull()
+  })
+
+  it('does not call checkIpRateLimit when source IP is unknown', async () => {
+    // No IP headers provided
+    const req = createRequest('POST', { body: '{}' })
+
+    await handleWebhook(req, { params })
+
+    expect(mockCheckIpRateLimit).not.toHaveBeenCalled()
+  })
+
   it('handles no subscription row (defaults to free)', async () => {
     subscriptionChain = setupSubscriptionQuery(null, { code: 'PGRST116' })
     mockFrom.mockImplementation((table: string) => {
@@ -514,6 +588,174 @@ describe('handleWebhook (namespaced route /wh/[username]/[slug])', () => {
     const aliceParams = Promise.resolve({ segments: ['alice', 'my-hook'] })
     const req = createRequest('POST', { body: '{}' })
     const res = await handleWebhook(req, { params: aliceParams })
+
+    expect(res.status).toBe(200)
+  })
+
+  // ─────────────────────────────────────────────────────────────────────────────
+  // Rate limiting tests
+  // ─────────────────────────────────────────────────────────────────────────────
+
+  it('returns 429 with Retry-After when slug rate limit is exceeded', async () => {
+    const resetTime = Date.now() + 30_000
+    mockCheckSlugRateLimit.mockResolvedValue({
+      success: false,
+      limit: 60,
+      remaining: 0,
+      reset: resetTime,
+    })
+
+    const req = createRequest('POST', { body: '{}' })
+    const res = await handleWebhook(req, { params })
+
+    expect(res.status).toBe(429)
+    const json = await res.json()
+    expect(json.error).toBe('Rate limit exceeded')
+    expect(res.headers.get('Retry-After')).toBeTruthy()
+    expect(Number(res.headers.get('Retry-After'))).toBeGreaterThan(0)
+    expect(res.headers.get('X-RateLimit-Limit')).toBe('60')
+    expect(res.headers.get('X-RateLimit-Remaining')).toBe('0')
+  })
+
+  it('returns 429 with Retry-After when IP rate limit is exceeded', async () => {
+    mockCheckSlugRateLimit.mockResolvedValue(passingRateLimit)
+
+    const resetTime = Date.now() + 15_000
+    mockCheckIpRateLimit.mockResolvedValue({
+      success: false,
+      limit: 200,
+      remaining: 0,
+      reset: resetTime,
+    })
+
+    const req = createRequest('POST', {
+      body: '{}',
+      headers: { 'x-forwarded-for': '1.2.3.4' },
+    })
+    const res = await handleWebhook(req, { params })
+
+    expect(res.status).toBe(429)
+    const json = await res.json()
+    expect(json.error).toBe('Rate limit exceeded')
+    expect(res.headers.get('Retry-After')).toBeTruthy()
+    expect(Number(res.headers.get('Retry-After'))).toBeGreaterThan(0)
+    expect(res.headers.get('X-RateLimit-Limit')).toBe('200')
+    expect(res.headers.get('X-RateLimit-Remaining')).toBe('0')
+  })
+
+  it('does not query the database when slug rate limit is exceeded', async () => {
+    mockCheckSlugRateLimit.mockResolvedValue(failingRateLimit(60))
+
+    const req = createRequest('POST', { body: '{}' })
+    await handleWebhook(req, { params })
+
+    // Database should not be queried when rate limited
+    expect(mockFrom).not.toHaveBeenCalled()
+  })
+
+  it('includes X-RateLimit-Limit and X-RateLimit-Remaining headers on success', async () => {
+    mockCheckSlugRateLimit.mockResolvedValue({
+      success: true,
+      limit: 60,
+      remaining: 42,
+      reset: Date.now() + 60_000,
+    })
+
+    const req = createRequest('POST', { body: '{}' })
+    const res = await handleWebhook(req, { params })
+
+    expect(res.status).toBe(200)
+    expect(res.headers.get('X-RateLimit-Limit')).toBe('60')
+    expect(res.headers.get('X-RateLimit-Remaining')).toBe('42')
+  })
+
+  it('includes rate limit headers on 404 responses', async () => {
+    mockCheckSlugRateLimit.mockResolvedValue({
+      success: true,
+      limit: 60,
+      remaining: 55,
+      reset: Date.now() + 60_000,
+    })
+
+    profileChain = setupProfileQuery(null, { code: 'PGRST116' })
+    mockFrom.mockImplementation((table: string) => {
+      if (table === 'profiles') return profileChain
+      return {}
+    })
+
+    const req = createRequest('POST', { body: '{}' })
+    const res = await handleWebhook(req, { params })
+
+    expect(res.status).toBe(404)
+    expect(res.headers.get('X-RateLimit-Limit')).toBe('60')
+    expect(res.headers.get('X-RateLimit-Remaining')).toBe('55')
+  })
+
+  it('includes rate limit headers on 413 responses', async () => {
+    mockCheckSlugRateLimit.mockResolvedValue({
+      success: true,
+      limit: 60,
+      remaining: 50,
+      reset: Date.now() + 60_000,
+    })
+
+    const largeBody = 'x'.repeat(1_048_577)
+    const req = createRequest('POST', { body: largeBody })
+    const res = await handleWebhook(req, { params })
+
+    expect(res.status).toBe(413)
+    expect(res.headers.get('X-RateLimit-Limit')).toBe('60')
+    expect(res.headers.get('X-RateLimit-Remaining')).toBe('50')
+  })
+
+  it('includes rate limit headers on monthly-limit 404 responses', async () => {
+    mockCheckSlugRateLimit.mockResolvedValue({
+      success: true,
+      limit: 60,
+      remaining: 45,
+      reset: Date.now() + 60_000,
+    })
+
+    mockRpc.mockImplementation((fn: string) => {
+      if (fn === 'get_current_usage') {
+        return Promise.resolve({ data: [{ request_count: 100, ai_analysis_count: 0 }] })
+      }
+      return Promise.resolve({ data: null, error: null })
+    })
+
+    const req = createRequest('POST', { body: '{}' })
+    const res = await handleWebhook(req, { params })
+
+    expect(res.status).toBe(404)
+    expect(res.headers.get('X-RateLimit-Limit')).toBe('60')
+    expect(res.headers.get('X-RateLimit-Remaining')).toBe('45')
+  })
+
+  it('allows request through when rate limiter returns null (Redis unavailable)', async () => {
+    mockCheckSlugRateLimit.mockResolvedValue(null)
+    mockCheckIpRateLimit.mockResolvedValue(null)
+
+    const req = createRequest('POST', {
+      body: '{}',
+      headers: { 'x-forwarded-for': '1.2.3.4' },
+    })
+    const res = await handleWebhook(req, { params })
+
+    expect(res.status).toBe(200)
+    // No rate limit headers when Redis is unavailable
+    expect(res.headers.get('X-RateLimit-Limit')).toBeNull()
+    expect(res.headers.get('X-RateLimit-Remaining')).toBeNull()
+  })
+
+  it('allows request through when rate limiting throws an error (fail open)', async () => {
+    mockCheckSlugRateLimit.mockRejectedValue(new Error('Unexpected Redis error'))
+    mockCheckIpRateLimit.mockRejectedValue(new Error('Unexpected Redis error'))
+
+    const req = createRequest('POST', {
+      body: '{}',
+      headers: { 'x-forwarded-for': '1.2.3.4' },
+    })
+    const res = await handleWebhook(req, { params })
 
     expect(res.status).toBe(200)
   })
