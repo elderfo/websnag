@@ -36,6 +36,7 @@ export default async function DashboardPage() {
   if (endpointsResult.error) throw new Error(endpointsResult.error.message)
   if (recentRequestsResult.error) throw new Error(recentRequestsResult.error.message)
   if (todayCountResult.error) throw new Error(todayCountResult.error.message)
+  if (subscriptionResult.error) throw new Error(subscriptionResult.error.message)
   if (usageResult.error) throw new Error(usageResult.error.message)
 
   const endpoints = endpointsResult.data ?? []
@@ -126,6 +127,6 @@ export default async function DashboardPage() {
 
 function getTodayStart(): string {
   const now = new Date()
-  const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+  const todayStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()))
   return todayStart.toISOString()
 }

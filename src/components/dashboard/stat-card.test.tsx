@@ -21,6 +21,7 @@ describe('StatCard', () => {
     expect(progressBar).toHaveAttribute('aria-valuenow', '65')
     expect(progressBar).toHaveAttribute('aria-valuemin', '0')
     expect(progressBar).toHaveAttribute('aria-valuemax', '100')
+    expect(progressBar).toHaveAttribute('aria-label', 'Requests')
   })
 
   it('does NOT render progress bar when progress is not provided', () => {

@@ -204,6 +204,53 @@ describe('DashboardPage', () => {
     expect(card).toHaveTextContent('42 / 100')
   })
 
+  it('renders monthly usage for Pro plan as unlimited', async () => {
+    mockSupabase.from = vi.fn((table: string) => {
+      if (table === 'endpoints') {
+        return {
+          select: vi.fn().mockReturnValue({
+            data: mockEndpoints,
+            error: null,
+          }),
+        }
+      }
+      if (table === 'requests') {
+        return {
+          select: vi.fn((_columns: string, opts?: { count?: string; head?: boolean }) => {
+            if (opts?.count === 'exact') {
+              return {
+                gte: vi.fn().mockReturnValue({ data: null, count: 7, error: null }),
+              }
+            }
+            return {
+              order: vi.fn().mockReturnValue({
+                limit: vi.fn().mockReturnValue({ data: mockRequests, error: null }),
+              }),
+            }
+          }),
+        }
+      }
+      if (table === 'subscriptions') {
+        return {
+          select: vi.fn().mockReturnValue({
+            single: vi.fn().mockReturnValue({
+              data: { plan: 'pro', status: 'active' },
+              error: null,
+            }),
+          }),
+        }
+      }
+      return { select: vi.fn().mockReturnValue({ data: null, error: null }) }
+    })
+
+    const Page = await DashboardPage()
+    render(Page)
+    const card = screen.getByTestId('stat-card-Monthly Usage')
+    expect(card).toHaveTextContent('42')
+    expect(card).toHaveTextContent('Unlimited')
+    expect(card).toHaveTextContent('Pro')
+  })
+
   it('renders recent activity section with endpoint names', async () => {
     const Page = await DashboardPage()
     render(Page)

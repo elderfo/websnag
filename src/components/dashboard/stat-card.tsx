@@ -28,6 +28,7 @@ export function StatCard({ label, value, subtitle, progress, children }: StatCar
             aria-valuenow={progress}
             aria-valuemin={0}
             aria-valuemax={100}
+            aria-label={label}
             className={`h-full rounded-full ${getProgressColor(progress)}`}
             style={{ width: `${progress}%` }}
           />
