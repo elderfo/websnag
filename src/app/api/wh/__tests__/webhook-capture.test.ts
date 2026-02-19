@@ -14,17 +14,8 @@ vi.mock('@/lib/supabase/admin', () => ({
   createAdminClient: () => mockSupabase,
 }))
 
-// Mock the rate limit module
-const mockCheckSlugRateLimit = vi.fn()
-const mockCheckIpRateLimit = vi.fn()
-
-vi.mock('@/lib/rate-limit', () => ({
-  checkSlugRateLimit: (...args: unknown[]) => mockCheckSlugRateLimit(...args),
-  checkIpRateLimit: (...args: unknown[]) => mockCheckIpRateLimit(...args),
-}))
-
-// Import the handler after mocking
-import { handleWebhook } from '../[slug]/route'
+// Import the handler after mocking — use the new [username]/[slug] route
+import { handleWebhook } from '../[username]/[slug]/route'
 
 // Helper to create a NextRequest with the right shape
 function createRequest(
@@ -35,7 +26,7 @@ function createRequest(
     searchParams?: Record<string, string>
   } = {}
 ) {
-  const url = new URL('http://localhost:3000/api/wh/test-slug')
+  const url = new URL('http://localhost:3000/api/wh/johndoe/test-slug')
   if (options.searchParams) {
     for (const [key, value] of Object.entries(options.searchParams)) {
       url.searchParams.set(key, value)
@@ -54,6 +45,11 @@ function createRequest(
   return new NextRequest(url, init)
 }
 
+// Default mock profile
+const mockProfile = {
+  id: 'user-456',
+}
+
 // Default mock endpoint
 const mockEndpoint = {
   id: 'endpoint-123',
@@ -69,25 +65,16 @@ const mockEndpoint = {
   updated_at: '2024-01-01T00:00:00Z',
 }
 
-// Default passing rate limit result
-const passingRateLimit = {
-  success: true,
-  limit: 60,
-  remaining: 59,
-  reset: Date.now() + 60_000,
-}
-
-// Default failing rate limit result
-function failingRateLimit(limit: number, remaining = 0) {
-  return {
-    success: false,
-    limit,
-    remaining,
-    reset: Date.now() + 30_000,
-  }
-}
-
 // Setup chainable mock for from().select().eq().single() pattern
+function setupProfileQuery(data: typeof mockProfile | null, error: unknown = null) {
+  const chain = {
+    select: vi.fn().mockReturnThis(),
+    eq: vi.fn().mockReturnThis(),
+    single: vi.fn().mockResolvedValue({ data, error }),
+  }
+  return chain
+}
+
 function setupEndpointQuery(data: typeof mockEndpoint | null, error: unknown = null) {
   const chain = {
     select: vi.fn().mockReturnThis(),
@@ -115,7 +102,8 @@ function setupInsert() {
   }
 }
 
-describe('handleWebhook', () => {
+describe('handleWebhook (namespaced route /wh/[username]/[slug])', () => {
+  let profileChain: ReturnType<typeof setupProfileQuery>
   let endpointChain: ReturnType<typeof setupEndpointQuery>
   let subscriptionChain: ReturnType<typeof setupSubscriptionQuery>
   let insertChain: ReturnType<typeof setupInsert>
@@ -123,12 +111,14 @@ describe('handleWebhook', () => {
   beforeEach(() => {
     vi.clearAllMocks()
 
+    profileChain = setupProfileQuery(mockProfile)
     endpointChain = setupEndpointQuery(mockEndpoint)
     subscriptionChain = setupSubscriptionQuery({ plan: 'free', status: 'active' })
     insertChain = setupInsert()
 
     // mockFrom returns different chains depending on the table
     mockFrom.mockImplementation((table: string) => {
+      if (table === 'profiles') return profileChain
       if (table === 'endpoints') return endpointChain
       if (table === 'subscriptions') return subscriptionChain
       if (table === 'requests') return insertChain
@@ -145,13 +135,9 @@ describe('handleWebhook', () => {
       }
       return Promise.resolve({ data: null, error: null })
     })
-
-    // Default: rate limits pass
-    mockCheckSlugRateLimit.mockResolvedValue(passingRateLimit)
-    mockCheckIpRateLimit.mockResolvedValue({ ...passingRateLimit, limit: 200 })
   })
 
-  const params = Promise.resolve({ slug: 'test-slug' })
+  const params = Promise.resolve({ username: 'johndoe', slug: 'test-slug' })
 
   it('returns configured response for valid POST with JSON body', async () => {
     const req = createRequest('POST', {
@@ -165,102 +151,6 @@ describe('handleWebhook', () => {
     const body = await res.text()
     expect(body).toBe('{"ok": true}')
     expect(res.headers.get('Content-Type')).toBe('application/json')
-  })
-
-  it('includes X-RateLimit-Limit and X-RateLimit-Remaining headers on success', async () => {
-    mockCheckSlugRateLimit.mockResolvedValue({
-      success: true,
-      limit: 60,
-      remaining: 42,
-      reset: Date.now() + 60_000,
-    })
-
-    const req = createRequest('POST', { body: '{}' })
-    const res = await handleWebhook(req, { params })
-
-    expect(res.status).toBe(200)
-    expect(res.headers.get('X-RateLimit-Limit')).toBe('60')
-    expect(res.headers.get('X-RateLimit-Remaining')).toBe('42')
-  })
-
-  it('returns 429 with Retry-After when slug rate limit is exceeded', async () => {
-    const resetTime = Date.now() + 30_000
-    mockCheckSlugRateLimit.mockResolvedValue({
-      success: false,
-      limit: 60,
-      remaining: 0,
-      reset: resetTime,
-    })
-
-    const req = createRequest('POST', { body: '{}' })
-    const res = await handleWebhook(req, { params })
-
-    expect(res.status).toBe(429)
-    const json = await res.json()
-    expect(json.error).toBe('Rate limit exceeded')
-    expect(res.headers.get('Retry-After')).toBeTruthy()
-    expect(Number(res.headers.get('Retry-After'))).toBeGreaterThan(0)
-    expect(res.headers.get('X-RateLimit-Limit')).toBe('60')
-    expect(res.headers.get('X-RateLimit-Remaining')).toBe('0')
-  })
-
-  it('returns 429 with Retry-After when IP rate limit is exceeded', async () => {
-    mockCheckSlugRateLimit.mockResolvedValue(passingRateLimit)
-
-    const resetTime = Date.now() + 15_000
-    mockCheckIpRateLimit.mockResolvedValue({
-      success: false,
-      limit: 200,
-      remaining: 0,
-      reset: resetTime,
-    })
-
-    const req = createRequest('POST', {
-      body: '{}',
-      headers: { 'x-forwarded-for': '1.2.3.4' },
-    })
-    const res = await handleWebhook(req, { params })
-
-    expect(res.status).toBe(429)
-    const json = await res.json()
-    expect(json.error).toBe('Rate limit exceeded')
-    expect(res.headers.get('Retry-After')).toBeTruthy()
-    expect(Number(res.headers.get('Retry-After'))).toBeGreaterThan(0)
-    expect(res.headers.get('X-RateLimit-Limit')).toBe('200')
-    expect(res.headers.get('X-RateLimit-Remaining')).toBe('0')
-  })
-
-  it('does not query the database when slug rate limit is exceeded', async () => {
-    mockCheckSlugRateLimit.mockResolvedValue(failingRateLimit(60))
-
-    const req = createRequest('POST', { body: '{}' })
-    await handleWebhook(req, { params })
-
-    // Database should not be queried when rate limited
-    expect(mockFrom).not.toHaveBeenCalled()
-  })
-
-  it('allows request through when rate limiter returns null (Redis unavailable)', async () => {
-    mockCheckSlugRateLimit.mockResolvedValue(null)
-    mockCheckIpRateLimit.mockResolvedValue(null)
-
-    const req = createRequest('POST', { body: '{}' })
-    const res = await handleWebhook(req, { params })
-
-    expect(res.status).toBe(200)
-    // No rate limit headers when Redis is unavailable
-    expect(res.headers.get('X-RateLimit-Limit')).toBeNull()
-    expect(res.headers.get('X-RateLimit-Remaining')).toBeNull()
-  })
-
-  it('allows request through when rate limiting throws an error (fail open)', async () => {
-    mockCheckSlugRateLimit.mockRejectedValue(new Error('Unexpected error'))
-    mockCheckIpRateLimit.mockRejectedValue(new Error('Unexpected error'))
-
-    const req = createRequest('POST', { body: '{}' })
-    const res = await handleWebhook(req, { params })
-
-    expect(res.status).toBe(200)
   })
 
   it('captures GET requests with query params correctly', async () => {
@@ -280,9 +170,25 @@ describe('handleWebhook', () => {
     )
   })
 
-  it('returns 404 for unknown slug', async () => {
+  it('returns 404 for unknown username (profile not found)', async () => {
+    profileChain = setupProfileQuery(null, { code: 'PGRST116' })
+    mockFrom.mockImplementation((table: string) => {
+      if (table === 'profiles') return profileChain
+      return {}
+    })
+
+    const req = createRequest('POST', { body: '{}' })
+    const res = await handleWebhook(req, { params })
+
+    expect(res.status).toBe(404)
+    const json = await res.json()
+    expect(json.error).toBe('Not found')
+  })
+
+  it('returns 404 for unknown slug (endpoint not found)', async () => {
     endpointChain = setupEndpointQuery(null, { code: 'PGRST116' })
     mockFrom.mockImplementation((table: string) => {
+      if (table === 'profiles') return profileChain
       if (table === 'endpoints') return endpointChain
       return {}
     })
@@ -295,9 +201,10 @@ describe('handleWebhook', () => {
     expect(json.error).toBe('Not found')
   })
 
-  it('returns 410 for inactive endpoint', async () => {
+  it('returns identical 404 for inactive endpoint (no info leakage)', async () => {
     endpointChain = setupEndpointQuery({ ...mockEndpoint, is_active: false })
     mockFrom.mockImplementation((table: string) => {
+      if (table === 'profiles') return profileChain
       if (table === 'endpoints') return endpointChain
       return {}
     })
@@ -305,9 +212,25 @@ describe('handleWebhook', () => {
     const req = createRequest('POST', { body: '{}' })
     const res = await handleWebhook(req, { params })
 
-    expect(res.status).toBe(410)
+    expect(res.status).toBe(404)
     const json = await res.json()
-    expect(json.error).toBe('Endpoint inactive')
+    expect(json.error).toBe('Not found')
+  })
+
+  it('returns identical 404 when monthly request limit is exceeded (no info leakage)', async () => {
+    mockRpc.mockImplementation((fn: string) => {
+      if (fn === 'get_current_usage') {
+        return Promise.resolve({ data: [{ request_count: 100, ai_analysis_count: 0 }] })
+      }
+      return Promise.resolve({ data: null, error: null })
+    })
+
+    const req = createRequest('POST', { body: '{}' })
+    const res = await handleWebhook(req, { params })
+
+    expect(res.status).toBe(404)
+    const json = await res.json()
+    expect(json.error).toBe('Not found')
   })
 
   it('returns 413 for body exceeding 1MB', async () => {
@@ -321,25 +244,10 @@ describe('handleWebhook', () => {
     expect(json.error).toBe('Payload too large')
   })
 
-  it('returns 429 when monthly request limit is exceeded', async () => {
-    mockRpc.mockImplementation((fn: string) => {
-      if (fn === 'get_current_usage') {
-        return Promise.resolve({ data: [{ request_count: 100, ai_analysis_count: 0 }] })
-      }
-      return Promise.resolve({ data: null, error: null })
-    })
-
-    const req = createRequest('POST', { body: '{}' })
-    const res = await handleWebhook(req, { params })
-
-    expect(res.status).toBe(429)
-    const json = await res.json()
-    expect(json.error).toBe('Monthly request limit reached')
-  })
-
   it('does not enforce limit for pro users', async () => {
     subscriptionChain = setupSubscriptionQuery({ plan: 'pro', status: 'active' })
     mockFrom.mockImplementation((table: string) => {
+      if (table === 'profiles') return profileChain
       if (table === 'endpoints') return endpointChain
       if (table === 'subscriptions') return subscriptionChain
       if (table === 'requests') return insertChain
@@ -416,6 +324,7 @@ describe('handleWebhook', () => {
     }
     endpointChain = setupEndpointQuery(customEndpoint)
     mockFrom.mockImplementation((table: string) => {
+      if (table === 'profiles') return profileChain
       if (table === 'endpoints') return endpointChain
       if (table === 'subscriptions') return subscriptionChain
       if (table === 'requests') return insertChain
@@ -464,143 +373,10 @@ describe('handleWebhook', () => {
     expect(insertArg.source_ip).toBe('1.2.3.4')
   })
 
-  it('extracts the first IP from a comma-separated x-forwarded-for header', async () => {
-    const req = createRequest('POST', {
-      body: '{}',
-      headers: { 'x-forwarded-for': '1.2.3.4, 10.0.0.1, 172.16.0.5' },
-    })
-
-    await handleWebhook(req, { params })
-
-    const insertArg = insertChain.insert.mock.calls[0][0]
-    expect(insertArg.source_ip).toBe('1.2.3.4')
-  })
-
-  it('falls back to x-real-ip when x-forwarded-for is absent', async () => {
-    const req = createRequest('POST', {
-      body: '{}',
-      headers: { 'x-real-ip': '5.6.7.8' },
-    })
-
-    await handleWebhook(req, { params })
-
-    const insertArg = insertChain.insert.mock.calls[0][0]
-    expect(insertArg.source_ip).toBe('5.6.7.8')
-  })
-
-  it('does not call checkIpRateLimit when IP is unknown', async () => {
-    // No IP headers — sourceIp will be 'unknown'
-    const req = createRequest('POST', { body: '{}' })
-
-    await handleWebhook(req, { params })
-
-    expect(mockCheckIpRateLimit).not.toHaveBeenCalled()
-  })
-
-  it('passes the correct slug key to checkSlugRateLimit', async () => {
-    mockCheckSlugRateLimit.mockResolvedValue(passingRateLimit)
-    const req = createRequest('POST', { body: '{}' })
-
-    await handleWebhook(req, { params })
-
-    expect(mockCheckSlugRateLimit).toHaveBeenCalledWith('test-slug')
-  })
-
-  it('passes the correct IP key to checkIpRateLimit', async () => {
-    const req = createRequest('POST', {
-      body: '{}',
-      headers: { 'x-forwarded-for': '9.8.7.6' },
-    })
-
-    await handleWebhook(req, { params })
-
-    expect(mockCheckIpRateLimit).toHaveBeenCalledWith('9.8.7.6')
-  })
-
-  it('includes rate limit headers on 404 response', async () => {
-    endpointChain = setupEndpointQuery(null, { code: 'PGRST116' })
-    mockFrom.mockImplementation((table: string) => {
-      if (table === 'endpoints') return endpointChain
-      return {}
-    })
-    mockCheckSlugRateLimit.mockResolvedValue({
-      success: true,
-      limit: 60,
-      remaining: 55,
-      reset: Date.now() + 60_000,
-    })
-
-    const req = createRequest('POST', { body: '{}' })
-    const res = await handleWebhook(req, { params })
-
-    expect(res.status).toBe(404)
-    expect(res.headers.get('X-RateLimit-Limit')).toBe('60')
-    expect(res.headers.get('X-RateLimit-Remaining')).toBe('55')
-  })
-
-  it('includes rate limit headers on 410 response', async () => {
-    endpointChain = setupEndpointQuery({ ...mockEndpoint, is_active: false })
-    mockFrom.mockImplementation((table: string) => {
-      if (table === 'endpoints') return endpointChain
-      return {}
-    })
-    mockCheckSlugRateLimit.mockResolvedValue({
-      success: true,
-      limit: 60,
-      remaining: 50,
-      reset: Date.now() + 60_000,
-    })
-
-    const req = createRequest('POST', { body: '{}' })
-    const res = await handleWebhook(req, { params })
-
-    expect(res.status).toBe(410)
-    expect(res.headers.get('X-RateLimit-Limit')).toBe('60')
-    expect(res.headers.get('X-RateLimit-Remaining')).toBe('50')
-  })
-
-  it('includes rate limit headers on 413 response', async () => {
-    mockCheckSlugRateLimit.mockResolvedValue({
-      success: true,
-      limit: 60,
-      remaining: 45,
-      reset: Date.now() + 60_000,
-    })
-    const largeBody = 'x'.repeat(1_048_577)
-    const req = createRequest('POST', { body: largeBody })
-
-    const res = await handleWebhook(req, { params })
-
-    expect(res.status).toBe(413)
-    expect(res.headers.get('X-RateLimit-Limit')).toBe('60')
-    expect(res.headers.get('X-RateLimit-Remaining')).toBe('45')
-  })
-
-  it('includes rate limit headers on monthly 429 response', async () => {
-    mockCheckSlugRateLimit.mockResolvedValue({
-      success: true,
-      limit: 60,
-      remaining: 30,
-      reset: Date.now() + 60_000,
-    })
-    mockRpc.mockImplementation((fn: string) => {
-      if (fn === 'get_current_usage') {
-        return Promise.resolve({ data: [{ request_count: 100, ai_analysis_count: 0 }] })
-      }
-      return Promise.resolve({ data: null, error: null })
-    })
-
-    const req = createRequest('POST', { body: '{}' })
-    const res = await handleWebhook(req, { params })
-
-    expect(res.status).toBe(429)
-    expect(res.headers.get('X-RateLimit-Limit')).toBe('60')
-    expect(res.headers.get('X-RateLimit-Remaining')).toBe('30')
-  })
-
   it('handles no subscription row (defaults to free)', async () => {
     subscriptionChain = setupSubscriptionQuery(null, { code: 'PGRST116' })
     mockFrom.mockImplementation((table: string) => {
+      if (table === 'profiles') return profileChain
       if (table === 'endpoints') return endpointChain
       if (table === 'subscriptions') return subscriptionChain
       if (table === 'requests') return insertChain

@@ -37,6 +37,23 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
+  // Check user has a username set
+  const admin = createAdminClient()
+  const { data: profile } = await admin
+    .from('profiles')
+    .select('username')
+    .eq('id', user.id)
+    .single()
+
+  if (!profile?.username) {
+    return NextResponse.json(
+      {
+        error: 'You must set a username before creating endpoints. Visit settings to set one.',
+      },
+      { status: 400 }
+    )
+  }
+
   // Parse and validate request body
   let body: unknown
   try {
@@ -102,12 +119,12 @@ export async function POST(request: Request) {
       )
     }
 
-    // Check slug uniqueness using admin client (bypasses RLS to see all slugs)
-    const adminClient = createAdminClient()
-    const { data: existingSlug } = await adminClient
+    // Check slug uniqueness per-user (slugs are namespaced under a user now)
+    const { data: existingSlug } = await admin
       .from('endpoints')
       .select('id')
       .eq('slug', parsed.data.slug)
+      .eq('user_id', user.id)
       .single()
 
     if (existingSlug) {
