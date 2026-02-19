@@ -93,4 +93,17 @@ describe('EndpointsPage', () => {
     expect(screen.getByTestId('endpoint-card-2')).toHaveTextContent('GitHub Webhook')
     expect(screen.queryByText('No endpoints yet')).not.toBeInTheDocument()
   })
+
+  it('throws when the Supabase query fails', async () => {
+    const { createClient } = await import('@/lib/supabase/server')
+    vi.mocked(createClient).mockResolvedValueOnce({
+      from: () => ({
+        select: () => ({
+          order: () => ({ data: null, error: { message: 'connection failed' } }),
+        }),
+      }),
+    } as never)
+
+    await expect(EndpointsPage()).rejects.toEqual({ message: 'connection failed' })
+  })
 })

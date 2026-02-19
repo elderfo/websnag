@@ -6,10 +6,14 @@ import type { Endpoint } from '@/types'
 export default async function EndpointsPage() {
   const supabase = await createClient()
 
-  const { data: endpoints } = await supabase
+  const { data: endpoints, error } = await supabase
     .from('endpoints')
     .select('*')
     .order('created_at', { ascending: false })
+
+  if (error) {
+    throw error
+  }
 
   const endpointList = (endpoints ?? []) as Endpoint[]
 

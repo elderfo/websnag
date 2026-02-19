@@ -9,8 +9,8 @@ vi.mock('next/navigation', () => ({
   useRouter: () => ({ push: mockPush }),
 }))
 
-vi.mock('@supabase/ssr', () => ({
-  createBrowserClient: () => ({
+vi.mock('@/lib/supabase/client', () => ({
+  createClient: () => ({
     auth: {
       signOut: mockSignOut,
     },
