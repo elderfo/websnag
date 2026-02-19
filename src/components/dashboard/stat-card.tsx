@@ -21,19 +21,23 @@ export function StatCard({ label, value, subtitle, progress, children }: StatCar
       <p className="text-xs font-medium uppercase tracking-wider text-text-muted">{label}</p>
       <p className="mt-1 text-2xl font-bold text-text-primary">{value}</p>
       {subtitle && <p className="mt-0.5 text-xs text-text-secondary">{subtitle}</p>}
-      {progress !== undefined && (
-        <div className="mt-3 h-1.5 w-full overflow-hidden rounded-full bg-white/5">
-          <div
-            role="progressbar"
-            aria-valuenow={progress}
-            aria-valuemin={0}
-            aria-valuemax={100}
-            aria-label={label}
-            className={`h-full rounded-full ${getProgressColor(progress)}`}
-            style={{ width: `${progress}%` }}
-          />
-        </div>
-      )}
+      {progress !== undefined &&
+        (() => {
+          const clamped = Math.min(100, Math.max(0, progress))
+          return (
+            <div className="mt-3 h-1.5 w-full overflow-hidden rounded-full bg-white/5">
+              <div
+                role="progressbar"
+                aria-valuenow={clamped}
+                aria-valuemin={0}
+                aria-valuemax={100}
+                aria-label={label}
+                className={`h-full rounded-full ${getProgressColor(clamped)}`}
+                style={{ width: `${clamped}%` }}
+              />
+            </div>
+          )
+        })()}
       {children && <div className="mt-2">{children}</div>}
     </Card>
   )

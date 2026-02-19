@@ -1,14 +1,12 @@
 import Link from 'next/link'
+import type { WebhookRequest } from '@/types'
 import { MethodBadge } from '@/components/requests/method-badge'
 import { formatBytes, timeAgo } from '@/lib/format'
 
-interface RecentRequest {
-  id: string
-  endpoint_id: string
-  method: string
-  size_bytes: number
-  received_at: string
-}
+type RecentRequest = Pick<
+  WebhookRequest,
+  'id' | 'endpoint_id' | 'method' | 'size_bytes' | 'received_at'
+>
 
 interface RecentActivityProps {
   requests: RecentRequest[]

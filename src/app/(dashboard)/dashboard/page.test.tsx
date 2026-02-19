@@ -75,7 +75,7 @@ function createMockSupabase() {
       if (table === 'subscriptions') {
         return {
           select: vi.fn().mockReturnValue({
-            single: vi.fn().mockReturnValue({
+            maybeSingle: vi.fn().mockReturnValue({
               data: supabaseError ? null : mockSubscription,
               error: supabaseError ? { message: supabaseError } : null,
             }),
@@ -114,7 +114,7 @@ vi.mock('next/link', () => ({
   ),
 }))
 
-// Mock client components that aren't relevant to test
+// Mock child components to isolate DashboardPage logic
 vi.mock('@/components/ui/refresh-button', () => ({
   RefreshButton: () => <button>Refresh</button>,
 }))
@@ -233,7 +233,7 @@ describe('DashboardPage', () => {
       if (table === 'subscriptions') {
         return {
           select: vi.fn().mockReturnValue({
-            single: vi.fn().mockReturnValue({
+            maybeSingle: vi.fn().mockReturnValue({
               data: { plan: 'pro', status: 'active' },
               error: null,
             }),
@@ -283,7 +283,7 @@ describe('DashboardPage', () => {
       if (table === 'subscriptions') {
         return {
           select: vi.fn().mockReturnValue({
-            single: vi.fn().mockReturnValue({ data: mockSubscription, error: null }),
+            maybeSingle: vi.fn().mockReturnValue({ data: mockSubscription, error: null }),
           }),
         }
       }
@@ -297,6 +297,24 @@ describe('DashboardPage', () => {
     expect(screen.getByText('Create your first endpoint')).toBeInTheDocument()
     const link = screen.getByText('Create your first endpoint').closest('a')
     expect(link).toHaveAttribute('href', '/endpoints/new')
+  })
+
+  it('throws when auth fails', async () => {
+    mockSupabase.auth.getUser = vi.fn().mockResolvedValue({
+      data: { user: null },
+      error: { message: 'Session expired' },
+    })
+
+    await expect(DashboardPage()).rejects.toThrow('Session expired')
+  })
+
+  it('throws when user is null', async () => {
+    mockSupabase.auth.getUser = vi.fn().mockResolvedValue({
+      data: { user: null },
+      error: null,
+    })
+
+    await expect(DashboardPage()).rejects.toThrow('Authentication required')
   })
 
   it('throws when Supabase query fails', async () => {

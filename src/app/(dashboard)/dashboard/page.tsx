@@ -10,12 +10,17 @@ import { LIMITS } from '@/types'
 export default async function DashboardPage() {
   const supabase = await createClient()
 
-  // Fetch user
+  // User ID is needed for the usage RPC call below, so fetch before the parallel block
   const {
     data: { user },
+    error: authError,
   } = await supabase.auth.getUser()
 
-  // Fetch all data in parallel
+  if (authError || !user) {
+    throw new Error(authError?.message ?? 'Authentication required')
+  }
+
+  // Fetch remaining data in parallel (user was fetched above for RPC param)
   const [endpointsResult, recentRequestsResult, todayCountResult, subscriptionResult, usageResult] =
     await Promise.all([
       supabase.from('endpoints').select('id, name, slug, is_active'),
@@ -28,15 +33,14 @@ export default async function DashboardPage() {
         .from('requests')
         .select('*', { count: 'exact', head: true })
         .gte('received_at', getTodayStart()),
-      supabase.from('subscriptions').select('plan, status').single(),
-      supabase.rpc('get_current_usage', { p_user_id: user?.id }),
+      supabase.from('subscriptions').select('plan, status').maybeSingle(),
+      supabase.rpc('get_current_usage', { p_user_id: user.id }),
     ])
 
   // Throw on errors to trigger error boundary
   if (endpointsResult.error) throw new Error(endpointsResult.error.message)
   if (recentRequestsResult.error) throw new Error(recentRequestsResult.error.message)
   if (todayCountResult.error) throw new Error(todayCountResult.error.message)
-  if (subscriptionResult.error) throw new Error(subscriptionResult.error.message)
   if (usageResult.error) throw new Error(usageResult.error.message)
 
   const endpoints = endpointsResult.data ?? []
