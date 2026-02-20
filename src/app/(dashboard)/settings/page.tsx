@@ -3,7 +3,11 @@ import { createClient } from '@/lib/supabase/server'
 import { getUserPlan } from '@/lib/usage'
 import { SettingsClient } from './settings-client'
 
-export default async function SettingsPage() {
+interface SettingsPageProps {
+  searchParams: Promise<{ setup?: string; redirect?: string }>
+}
+
+export default async function SettingsPage({ searchParams }: SettingsPageProps) {
   const supabase = await createClient()
   const {
     data: { user },
@@ -12,6 +16,8 @@ export default async function SettingsPage() {
   if (!user) {
     redirect('/login')
   }
+
+  const params = await searchParams
 
   const { data: subscription } = await supabase
     .from('subscriptions')
@@ -39,6 +45,8 @@ export default async function SettingsPage() {
         createdAt={user.created_at}
         plan={plan}
         initialUsername={profile?.username ?? null}
+        isSetup={params.setup === 'username'}
+        redirectAfterSave={params.redirect ?? null}
       />
     </div>
   )

@@ -10,6 +10,24 @@ export async function GET(request: Request) {
     const supabase = await createClient()
     const { error } = await supabase.auth.exchangeCodeForSession(code)
     if (!error) {
+      // For authenticated users without a username, redirect to settings to set one first
+      const {
+        data: { user },
+      } = await supabase.auth.getUser()
+
+      if (user) {
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('username')
+          .eq('id', user.id)
+          .maybeSingle()
+
+        if (!profile?.username) {
+          const redirectParam = next !== '/dashboard' ? `&redirect=${encodeURIComponent(next)}` : ''
+          return NextResponse.redirect(`${origin}/settings?setup=username${redirectParam}`)
+        }
+      }
+
       return NextResponse.redirect(`${origin}${next}`)
     }
   }

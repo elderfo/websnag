@@ -82,6 +82,18 @@ function createMockSupabase() {
           }),
         }
       }
+      if (table === 'profiles') {
+        return {
+          select: vi.fn().mockReturnValue({
+            eq: vi.fn().mockReturnValue({
+              maybeSingle: vi.fn().mockReturnValue({
+                data: { username: 'testuser' },
+                error: null,
+              }),
+            }),
+          }),
+        }
+      }
       return { select: vi.fn().mockReturnValue({ data: null, error: null }) }
     }),
     rpc: vi.fn().mockReturnValue({
@@ -240,6 +252,18 @@ describe('DashboardPage', () => {
           }),
         }
       }
+      if (table === 'profiles') {
+        return {
+          select: vi.fn().mockReturnValue({
+            eq: vi.fn().mockReturnValue({
+              maybeSingle: vi.fn().mockReturnValue({
+                data: { username: 'testuser' },
+                error: null,
+              }),
+            }),
+          }),
+        }
+      }
       return { select: vi.fn().mockReturnValue({ data: null, error: null }) }
     })
 
@@ -284,6 +308,18 @@ describe('DashboardPage', () => {
         return {
           select: vi.fn().mockReturnValue({
             maybeSingle: vi.fn().mockReturnValue({ data: mockSubscription, error: null }),
+          }),
+        }
+      }
+      if (table === 'profiles') {
+        return {
+          select: vi.fn().mockReturnValue({
+            eq: vi.fn().mockReturnValue({
+              maybeSingle: vi.fn().mockReturnValue({
+                data: { username: 'testuser' },
+                error: null,
+              }),
+            }),
           }),
         }
       }
