@@ -835,7 +835,7 @@ describe('slug enumeration hardening (#10)', () => {
 
   async function capture404Response(
     scenario: 'profile-not-found' | 'endpoint-not-found' | 'endpoint-inactive' | 'over-quota'
-  ): Promise<{ status: number; body: string; headerKeys: string[] }> {
+  ): Promise<{ status: number; body: string; headerEntries: [string, string][] }> {
     switch (scenario) {
       case 'profile-not-found': {
         const chain = setupProfileQuery(null, { code: 'PGRST116' })
