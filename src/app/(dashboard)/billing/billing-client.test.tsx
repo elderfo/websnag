@@ -269,4 +269,33 @@ describe('BillingClient', () => {
     expect(screen.queryByRole('button', { name: /Re-subscribe/ })).not.toBeInTheDocument()
     expect(screen.getByText(/Renews on/)).toBeInTheDocument()
   })
+
+  it('calls portal API when clicking Re-subscribe', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ url: '/portal' }),
+    } as Response)
+
+    // @ts-expect-error - test override of global fetch
+    globalThis.fetch = fetchMock
+
+    render(
+      <BillingClient
+        plan="pro"
+        status="active"
+        hasStripeCustomer={true}
+        requestCount={0}
+        aiAnalysisCount={0}
+        maxRequests={Infinity}
+        maxAnalyses={Infinity}
+        currentPeriodEnd="2026-03-15T00:00:00Z"
+        cancelAtPeriodEnd={true}
+      />
+    )
+
+    const user = userEvent.setup()
+    await user.click(screen.getByRole('button', { name: /Re-subscribe/ }))
+
+    expect(fetchMock).toHaveBeenCalled()
+  })
 })
