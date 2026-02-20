@@ -22,6 +22,56 @@ function applyRateLimitHeaders(headers: Headers, rateLimitResult: RateLimitResul
   }
 }
 
+type BodyReadResult = { body: string; sizeBytes: number } | { body: null; sizeBytes: number }
+
+/**
+ * Reads the request body with a byte-size limit. Checks Content-Length first
+ * for an early reject, then streams chunks and aborts if the limit is exceeded.
+ */
+async function readBodyWithLimit(req: NextRequest, maxBytes: number): Promise<BodyReadResult> {
+  // Fast path: reject based on Content-Length header before reading any bytes
+  const contentLength = req.headers.get('content-length')
+  if (contentLength !== null) {
+    const declared = parseInt(contentLength, 10)
+    if (!isNaN(declared) && declared > maxBytes) {
+      return { body: null, sizeBytes: declared }
+    }
+  }
+
+  // No readable body (GET/HEAD or empty)
+  if (!req.body) {
+    return { body: '', sizeBytes: 0 }
+  }
+
+  const reader = req.body.getReader()
+  const chunks: Uint8Array[] = []
+  let totalBytes = 0
+
+  try {
+    for (;;) {
+      const { done, value } = await reader.read()
+      if (done) break
+
+      totalBytes += value.byteLength
+      if (totalBytes > maxBytes) {
+        await reader.cancel()
+        return { body: null, sizeBytes: totalBytes }
+      }
+
+      chunks.push(value)
+    }
+  } catch {
+    // If the stream errors out, treat whatever we have as the body
+    // This mirrors the previous req.text() behavior
+  }
+
+  const decoder = new TextDecoder()
+  const body =
+    chunks.map((chunk) => decoder.decode(chunk, { stream: true })).join('') + decoder.decode()
+
+  return { body, sizeBytes: totalBytes }
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Legacy redirect helper (1 segment: /wh/[slug])
 // ─────────────────────────────────────────────────────────────────────────────
@@ -179,12 +229,10 @@ async function handleWebhookCapture(
     return NextResponse.json({ error: 'Not found' }, { status: 404, headers: notFoundHeaders })
   }
 
-  // 4. Read body (must read before checking size)
-  const body = await req.text()
+  // 4. Read body with streaming size limit
+  const { body, sizeBytes } = await readBodyWithLimit(req, MAX_BODY_SIZE)
 
-  // Use byte length, not character count — multi-byte chars would pass .length check
-  const sizeBytes = body ? new TextEncoder().encode(body).length : 0
-  if (sizeBytes > MAX_BODY_SIZE) {
+  if (body === null) {
     const tooLargeHeaders = new Headers()
     applyRateLimitHeaders(tooLargeHeaders, primaryResult)
     return NextResponse.json(

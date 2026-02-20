@@ -295,6 +295,20 @@ describe('handleWebhook (namespaced route /wh/[username]/[slug])', () => {
     expect(res.status).toBe(413)
   })
 
+  it('rejects immediately when Content-Length header exceeds 1MB', async () => {
+    // Small actual body but Content-Length claims 2MB
+    const req = createRequest('POST', {
+      body: '{"small": true}',
+      headers: { 'Content-Length': '2000000' },
+    })
+
+    const res = await handleWebhook(req, { params })
+
+    expect(res.status).toBe(413)
+    const json = await res.json()
+    expect(json.error).toBe('Payload too large')
+  })
+
   it('does not enforce limit for pro users', async () => {
     subscriptionChain = setupSubscriptionQuery({ plan: 'pro', status: 'active' })
     mockFrom.mockImplementation((table: string) => {
