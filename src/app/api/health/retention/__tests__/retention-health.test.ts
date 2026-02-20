@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 
 const mockRpc = vi.fn()
 
@@ -48,6 +48,10 @@ beforeEach(() => {
   vi.stubEnv('ALERT_EMAIL_RECIPIENTS', 'ops@example.com')
   vi.stubEnv('ALERT_EMAIL_FROM', 'alerts@websnag.dev')
   mockFetch.mockResolvedValue({ ok: true, text: async () => '{}' })
+})
+
+afterEach(() => {
+  vi.useRealTimers()
 })
 
 describe('GET /api/health/retention', () => {

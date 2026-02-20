@@ -10,6 +10,8 @@ RETURNS TABLE (
   status TEXT,
   return_message TEXT
 ) AS $$
+DECLARE
+  safe_limit INT := LEAST(GREATEST(p_limit, 1), 50);
 BEGIN
   -- pg_cron stores job metadata in cron.job and execution history in
   -- cron.job_run_details. The job name lives on cron.job, so we join
@@ -20,6 +22,10 @@ BEGIN
   JOIN cron.job j ON j.jobid = jrd.jobid
   WHERE j.jobname = 'cleanup-expired-requests'
   ORDER BY jrd.start_time DESC
-  LIMIT p_limit;
+  LIMIT safe_limit;
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, cron;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = pg_catalog, cron;
+
+-- Only the service_role (used by the admin client) should call this function.
+REVOKE EXECUTE ON FUNCTION get_retention_job_runs(INT) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION get_retention_job_runs(INT) TO service_role;
