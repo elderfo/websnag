@@ -139,4 +139,41 @@ describe('LoginForm', () => {
 
     expect(getButton(/send magic link/i)).toBeInTheDocument()
   })
+
+  it('stores upgrade intent in sessionStorage when intent=upgrade is in URL', () => {
+    // Mock window.location.search
+    Object.defineProperty(window, 'location', {
+      value: {
+        ...window.location,
+        search: '?intent=upgrade',
+        origin: 'http://localhost:3000',
+      },
+      writable: true,
+    })
+
+    const setItemSpy = vi.spyOn(Storage.prototype, 'setItem')
+
+    render(<LoginForm />)
+
+    expect(setItemSpy).toHaveBeenCalledWith('upgrade_intent', 'true')
+    setItemSpy.mockRestore()
+  })
+
+  it('does not store upgrade intent when no intent param is present', () => {
+    Object.defineProperty(window, 'location', {
+      value: {
+        ...window.location,
+        search: '',
+        origin: 'http://localhost:3000',
+      },
+      writable: true,
+    })
+
+    const setItemSpy = vi.spyOn(Storage.prototype, 'setItem')
+
+    render(<LoginForm />)
+
+    expect(setItemSpy).not.toHaveBeenCalledWith('upgrade_intent', 'true')
+    setItemSpy.mockRestore()
+  })
 })
