@@ -34,6 +34,16 @@ vi.mock('@/lib/url-validator', () => ({
   validateTargetUrl: (...args: unknown[]) => mockValidateTargetUrl(...args),
 }))
 
+vi.mock('@/lib/logger', () => ({
+  createRequestLogger: () => ({
+    info: vi.fn(),
+    error: vi.fn(),
+    warn: vi.fn(),
+    debug: vi.fn(),
+    requestId: 'test-request-id',
+  }),
+}))
+
 import { POST } from './route'
 import { getUserPlan } from '@/lib/usage'
 

@@ -33,6 +33,16 @@ export const usernameSchema = z
     'Must be 3-32 chars, lowercase alphanumeric and hyphens, no leading/trailing hyphens'
   )
 
+export const aiAnalysisSchema = z.object({
+  source: z.string(),
+  webhook_type: z.string(),
+  summary: z.string(),
+  key_fields: z.array(z.object({ path: z.string(), description: z.string() })),
+  schema_notes: z.string(),
+  handler_node: z.string(),
+  handler_python: z.string(),
+})
+
 export const setUsernameSchema = z.object({
   username: z
     .string()

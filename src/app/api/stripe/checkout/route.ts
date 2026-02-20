@@ -1,9 +1,11 @@
 import { stripe } from '@/lib/stripe'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { createClient } from '@/lib/supabase/server'
+import { createRequestLogger } from '@/lib/logger'
 import { NextResponse } from 'next/server'
 
 export async function POST() {
+  const log = createRequestLogger('stripe-checkout')
   try {
     const supabase = await createClient()
     const {
@@ -34,7 +36,7 @@ export async function POST() {
       customerId = customer.id
 
       // Upsert the subscription row with the customer ID
-      await admin.from('subscriptions').upsert(
+      const { error: upsertError } = await admin.from('subscriptions').upsert(
         {
           user_id: user.id,
           stripe_customer_id: customerId,
@@ -43,6 +45,11 @@ export async function POST() {
         },
         { onConflict: 'user_id' }
       )
+
+      if (upsertError) {
+        log.error({ err: upsertError, userId: user.id }, 'subscription upsert failed')
+        return NextResponse.json({ error: 'Failed to initialize subscription' }, { status: 500 })
+      }
     }
 
     const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'
@@ -63,7 +70,7 @@ export async function POST() {
 
     return NextResponse.json({ url: session.url })
   } catch (error) {
-    console.error('Stripe checkout error:', error)
+    log.error({ err: error }, 'checkout session creation failed')
     return NextResponse.json({ error: 'Failed to create checkout session' }, { status: 500 })
   }
 }

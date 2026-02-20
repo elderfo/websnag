@@ -38,7 +38,9 @@ websnag/
 │   └── migrations/              # SQL migration files (numbered)
 │       ├── 001_initial_schema.sql
 │       ├── 002_rls_policies.sql
-│       └── 003_usage_functions.sql
+│       ├── 003_usage_functions.sql
+│       ├── 004_profiles_and_usernames.sql
+│       └── 005_data_retention.sql   # Retention cleanup function + pg_cron schedule
 ├── src/
 │   ├── app/
 │   │   ├── layout.tsx           # Root layout with providers
@@ -60,6 +62,9 @@ websnag/
 │   │       ├── wh/[slug]/route.ts     # Webhook capture endpoint (THE critical path)
 │   │       ├── analyze/route.ts       # AI analysis endpoint
 │   │       ├── replay/route.ts        # Replay webhook to target URL
+│   │       ├── health/route.ts       # Health check endpoint (DB connectivity)
+│   │       ├── admin/
+│   │       │   └── retention/route.ts # Manual retention cleanup trigger
 │   │       └── stripe/
 │   │           ├── checkout/route.ts  # Create Stripe Checkout session
 │   │           └── webhook/route.ts   # Stripe webhook handler
@@ -77,6 +82,7 @@ websnag/
 │   │   │   └── middleware.ts    # Auth middleware for protected routes
 │   │   ├── stripe.ts            # Stripe client and helpers
 │   │   ├── anthropic.ts         # Claude API client and prompts
+│   │   ├── logger.ts             # Pino structured logger (createLogger, createRequestLogger)
 │   │   ├── usage.ts             # Usage tracking and limit checking
 │   │   └── utils.ts             # Shared utilities
 │   ├── hooks/

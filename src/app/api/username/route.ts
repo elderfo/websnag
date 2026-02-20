@@ -1,10 +1,12 @@
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { createRequestLogger } from '@/lib/logger'
 import { setUsernameSchema } from '@/lib/validators'
 import { isBlockedUsername } from '@/lib/blocked-usernames'
 import { NextResponse } from 'next/server'
 
 export async function GET() {
+  const log = createRequestLogger('username')
   try {
     const supabase = await createClient()
     const {
@@ -26,18 +28,19 @@ export async function GET() {
       if (error.code === 'PGRST116') {
         return NextResponse.json({ username: null })
       }
-      console.error('[username] GET profile query error:', error)
+      log.error({ err: error }, 'GET profile query failed')
       return NextResponse.json({ error: 'Failed to fetch username' }, { status: 500 })
     }
 
     return NextResponse.json({ username: data?.username ?? null })
   } catch (err) {
-    console.error('[username] GET unhandled error:', err)
+    log.error({ err }, 'GET unhandled error')
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }
 
 export async function POST(req: Request) {
+  const log = createRequestLogger('username')
   try {
     const supabase = await createClient()
     const {
@@ -77,7 +80,7 @@ export async function POST(req: Request) {
       .single()
 
     if (profileError && profileError.code !== 'PGRST116') {
-      console.error('[username] POST profile lookup error:', profileError)
+      log.error({ err: profileError }, 'POST profile lookup failed')
       return NextResponse.json({ error: 'Failed to verify username status' }, { status: 500 })
     }
 
@@ -93,7 +96,7 @@ export async function POST(req: Request) {
       .single()
 
     if (uniquenessError && uniquenessError.code !== 'PGRST116') {
-      console.error('[username] POST uniqueness check error:', uniquenessError)
+      log.error({ err: uniquenessError }, 'POST uniqueness check failed')
       return NextResponse.json({ error: 'Failed to verify username availability' }, { status: 500 })
     }
 
@@ -112,13 +115,13 @@ export async function POST(req: Request) {
         // Unique constraint violation — another request raced us to claim the username
         return NextResponse.json({ error: 'Username already taken' }, { status: 409 })
       }
-      console.error('[username] POST upsert error:', error)
+      log.error({ err: error }, 'POST upsert failed')
       return NextResponse.json({ error: 'Failed to save username' }, { status: 500 })
     }
 
     return NextResponse.json({ username })
   } catch (err) {
-    console.error('[username] POST unhandled error:', err)
+    log.error({ err }, 'POST unhandled error')
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }

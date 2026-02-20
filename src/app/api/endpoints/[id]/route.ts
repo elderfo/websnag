@@ -1,11 +1,13 @@
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { createRequestLogger } from '@/lib/logger'
 import { updateEndpointSchema } from '@/lib/validators'
 import { getUserPlan } from '@/lib/usage'
 import { isValidCustomSlug } from '@/lib/utils'
 import { NextRequest, NextResponse } from 'next/server'
 
 export async function GET(_request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const log = createRequestLogger('endpoints')
   const { id } = await params
   const supabase = await createClient()
   const {
@@ -18,7 +20,12 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
 
   const { data, error } = await supabase.from('endpoints').select('*').eq('id', id).single()
 
-  if (error || !data) {
+  if (error) {
+    log.error({ err: error, endpointId: id }, 'GET endpoint query failed')
+    return NextResponse.json({ error: 'Endpoint not found' }, { status: 404 })
+  }
+
+  if (!data) {
     return NextResponse.json({ error: 'Endpoint not found' }, { status: 404 })
   }
 
@@ -26,6 +33,7 @@ export async function GET(_request: NextRequest, { params }: { params: Promise<{
 }
 
 export async function PATCH(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const log = createRequestLogger('endpoints')
   const { id } = await params
   const supabase = await createClient()
   const {
@@ -128,8 +136,11 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     .single()
 
   if (updateError) {
+    log.error({ err: updateError, endpointId: id }, 'endpoint update failed')
     return NextResponse.json({ error: updateError.message }, { status: 500 })
   }
+
+  log.info({ endpointId: id, fields: Object.keys(updateData) }, 'endpoint updated')
 
   return NextResponse.json(updated)
 }
@@ -138,6 +149,7 @@ export async function DELETE(
   _request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const log = createRequestLogger('endpoints')
   const { id } = await params
   const supabase = await createClient()
   const {
@@ -152,12 +164,15 @@ export async function DELETE(
   const { error, count } = await supabase.from('endpoints').delete({ count: 'exact' }).eq('id', id)
 
   if (error) {
+    log.error({ err: error, endpointId: id }, 'endpoint deletion failed')
     return NextResponse.json({ error: error.message }, { status: 500 })
   }
 
   if (count === 0) {
     return NextResponse.json({ error: 'Endpoint not found' }, { status: 404 })
   }
+
+  log.info({ endpointId: id }, 'endpoint deleted')
 
   return new NextResponse(null, { status: 204 })
 }

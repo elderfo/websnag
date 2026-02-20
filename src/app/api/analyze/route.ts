@@ -1,11 +1,15 @@
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { createRequestLogger } from '@/lib/logger'
 import { analyzeWebhook } from '@/lib/anthropic'
 import { analyzeRequestSchema } from '@/lib/validators'
 import { canAnalyze, getUserPlan } from '@/lib/usage'
 import { NextResponse } from 'next/server'
+import { APIError } from '@anthropic-ai/sdk'
+import type { AiAnalysis } from '@/types'
 
 export async function POST(req: Request) {
+  const log = createRequestLogger('analyze')
   try {
     const supabase = await createClient()
     const {
@@ -54,22 +58,50 @@ export async function POST(req: Request) {
     }
 
     // Call Claude
-    const analysis = await analyzeWebhook(
-      webhookRequest.method,
-      webhookRequest.headers,
-      webhookRequest.body,
-      webhookRequest.content_type
-    )
+    let analysis: AiAnalysis
+    try {
+      analysis = await analyzeWebhook(
+        webhookRequest.method,
+        webhookRequest.headers,
+        webhookRequest.body,
+        webhookRequest.content_type
+      )
+    } catch (error) {
+      if (error instanceof APIError) {
+        log.error({ err: error, requestId: requestId }, 'Anthropic API error')
+        return NextResponse.json({ error: 'AI service unavailable' }, { status: 502 })
+      }
+      log.error({ err: error, requestId: requestId }, 'AI analysis response validation failed')
+      return NextResponse.json(
+        { error: 'AI analysis produced an invalid response' },
+        { status: 502 }
+      )
+    }
 
     // Store result
-    await admin.from('requests').update({ ai_analysis: analysis }).eq('id', requestId)
+    const { error: updateError } = await admin
+      .from('requests')
+      .update({ ai_analysis: analysis })
+      .eq('id', requestId)
+
+    if (updateError) {
+      log.error({ err: updateError, requestId }, 'failed to store analysis result')
+    }
 
     // Increment usage
-    await admin.rpc('increment_ai_analysis_count', { p_user_id: user.id })
+    const { error: rpcError } = await admin.rpc('increment_ai_analysis_count', {
+      p_user_id: user.id,
+    })
+
+    if (rpcError) {
+      log.error({ err: rpcError, userId: user.id }, 'failed to increment AI analysis count')
+    }
+
+    log.info({ requestId, userId: user.id, source: analysis.source }, 'AI analysis completed')
 
     return NextResponse.json(analysis)
   } catch (error) {
-    console.error('Analysis error:', error)
+    log.error({ err: error }, 'analysis failed')
     return NextResponse.json({ error: 'Analysis failed' }, { status: 500 })
   }
 }

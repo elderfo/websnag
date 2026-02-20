@@ -1,4 +1,5 @@
 import { createClient } from '@/lib/supabase/server'
+import { createRequestLogger } from '@/lib/logger'
 import { replayRequestSchema } from '@/lib/validators'
 import { getUserPlan } from '@/lib/usage'
 import { validateTargetUrl } from '@/lib/url-validator'
@@ -29,6 +30,7 @@ const SKIP_HEADERS = new Set([
 ])
 
 export async function POST(req: Request) {
+  const log = createRequestLogger('replay')
   try {
     const supabase = await createClient()
     const {
@@ -146,7 +148,7 @@ export async function POST(req: Request) {
       )
     }
   } catch (error) {
-    console.error('Replay error:', error)
+    log.error({ err: error }, 'replay failed')
     return NextResponse.json({ error: 'Replay failed' }, { status: 500 })
   }
 }

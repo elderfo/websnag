@@ -1,5 +1,8 @@
 import { Ratelimit } from '@upstash/ratelimit'
 import { Redis } from '@upstash/redis'
+import { createLogger } from '@/lib/logger'
+
+const log = createLogger('rate-limit')
 
 export interface RateLimitResult {
   success: boolean
@@ -16,14 +19,14 @@ let ipLimiter: Ratelimit | null = null
 function getRedis(): Redis | null {
   if (redis !== null) return redis
   if (!process.env.UPSTASH_REDIS_REST_URL || !process.env.UPSTASH_REDIS_REST_TOKEN) {
-    console.warn('[rate-limit] UPSTASH_REDIS_REST_URL or UPSTASH_REDIS_REST_TOKEN not set — rate limiting is DISABLED')
+    log.warn('UPSTASH_REDIS_REST_URL or UPSTASH_REDIS_REST_TOKEN not set — rate limiting is DISABLED')
     return null
   }
   try {
     redis = Redis.fromEnv()
     return redis
   } catch (error) {
-    console.error('[rate-limit] Failed to create Redis client:', error)
+    log.error({ err: error }, 'failed to create Redis client')
     return null
   }
 }
@@ -67,7 +70,7 @@ export async function checkSlugRateLimit(slug: string): Promise<RateLimitResult 
     }
   } catch (error) {
     // Fail open: if Redis is unavailable, allow the request
-    console.error('[rate-limit] checkSlugRateLimit failed:', error)
+    log.error({ err: error }, 'checkSlugRateLimit failed')
     return null
   }
 }
@@ -87,7 +90,7 @@ export async function checkIpRateLimit(ip: string): Promise<RateLimitResult | nu
     }
   } catch (error) {
     // Fail open: if Redis is unavailable, allow the request
-    console.error('[rate-limit] checkIpRateLimit failed:', error)
+    log.error({ err: error }, 'checkIpRateLimit failed')
     return null
   }
 }

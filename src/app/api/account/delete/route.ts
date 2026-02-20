@@ -1,9 +1,11 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { createRequestLogger } from '@/lib/logger'
 import { stripe } from '@/lib/stripe'
 
 export async function POST() {
+  const log = createRequestLogger('account-delete')
   try {
     const supabase = await createClient()
 
@@ -26,7 +28,7 @@ export async function POST() {
       .maybeSingle()
 
     if (subError) {
-      console.error('[account-delete] subscription lookup failed:', subError)
+      log.error({ err: subError }, 'subscription lookup failed')
     }
 
     // Cancel Stripe subscription if one exists
@@ -36,7 +38,7 @@ export async function POST() {
       } catch (err) {
         // Log but don't block deletion — the subscription will eventually be
         // cleaned up by Stripe's own lifecycle or a future reconciliation job
-        console.error('[account-delete] failed to cancel Stripe subscription:', err)
+        log.error({ err }, 'failed to cancel Stripe subscription')
       }
     }
 
@@ -45,14 +47,14 @@ export async function POST() {
     const { error: deleteError } = await adminClient.auth.admin.deleteUser(user.id)
 
     if (deleteError) {
-      console.error('[account-delete] failed to delete user:', deleteError)
+      log.error({ err: deleteError }, 'failed to delete user')
       return NextResponse.json({ error: 'Failed to delete account' }, { status: 500 })
     }
 
-    console.info('[account-delete] user deleted:', user.id)
+    log.info({ userId: user.id }, 'user deleted')
     return NextResponse.json({ success: true })
   } catch (err) {
-    console.error('[account-delete] unhandled error:', err)
+    log.error({ err }, 'unhandled error')
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }

@@ -224,6 +224,16 @@ vi.mock('@/lib/supabase/admin', () => ({
   })),
 }))
 
+vi.mock('@/lib/logger', () => ({
+  createRequestLogger: () => ({
+    info: vi.fn(),
+    error: vi.fn(),
+    warn: vi.fn(),
+    debug: vi.fn(),
+    requestId: 'test-request-id',
+  }),
+}))
+
 // Helper to create a chain of Supabase query methods
 function createQueryChain(finalResult: { data?: unknown; error?: unknown; count?: number | null }) {
   const chain: Record<string, unknown> = {}

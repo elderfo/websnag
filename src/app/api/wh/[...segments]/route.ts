@@ -1,4 +1,5 @@
 import { createAdminClient } from '@/lib/supabase/admin'
+import { createRequestLogger } from '@/lib/logger'
 import { checkSlugRateLimit, checkIpRateLimit, RateLimitResult } from '@/lib/rate-limit'
 import { getUserPlan, canReceiveRequest } from '@/lib/usage'
 import { NextRequest, NextResponse } from 'next/server'
@@ -22,11 +23,76 @@ function applyRateLimitHeaders(headers: Headers, rateLimitResult: RateLimitResul
   }
 }
 
+type BodyReadResult =
+  | { status: 'ok'; body: string; sizeBytes: number }
+  | { status: 'too_large'; sizeBytes: number }
+  | { status: 'stream_error'; sizeBytes: number }
+
+/**
+ * Reads the request body with a byte-size limit. Checks Content-Length first
+ * for an early reject, then streams chunks and aborts if the limit is exceeded.
+ *
+ * Returns a discriminated union:
+ * - `status: 'ok'` — body was read successfully
+ * - `status: 'too_large'` — Content-Length or streamed bytes exceeded maxBytes
+ * - `status: 'stream_error'` — stream read failed (partial data discarded)
+ */
+async function readBodyWithLimit(
+  req: NextRequest,
+  maxBytes: number,
+  log: ReturnType<typeof createRequestLogger>
+): Promise<BodyReadResult> {
+  // Fast path: reject based on Content-Length header before reading any bytes
+  const contentLength = req.headers.get('content-length')
+  if (contentLength !== null) {
+    const declared = parseInt(contentLength, 10)
+    if (!isNaN(declared) && declared > maxBytes) {
+      return { status: 'too_large', sizeBytes: declared }
+    }
+  }
+
+  // No readable body (GET/HEAD or empty)
+  if (!req.body) {
+    return { status: 'ok', body: '', sizeBytes: 0 }
+  }
+
+  const reader = req.body.getReader()
+  const chunks: Uint8Array[] = []
+  let totalBytes = 0
+
+  try {
+    for (;;) {
+      const { done, value } = await reader.read()
+      if (done) break
+
+      totalBytes += value.byteLength
+      if (totalBytes > maxBytes) {
+        await reader.cancel()
+        return { status: 'too_large', sizeBytes: totalBytes }
+      }
+
+      chunks.push(value)
+    }
+  } catch (error) {
+    // Discard partial chunks — returning truncated data could cause
+    // corrupt payloads to be stored silently.
+    log.error({ err: error, totalBytesRead: totalBytes }, 'request body stream read failed')
+    return { status: 'stream_error', sizeBytes: totalBytes }
+  }
+
+  const decoder = new TextDecoder()
+  const body =
+    chunks.map((chunk) => decoder.decode(chunk, { stream: true })).join('') + decoder.decode()
+
+  return { status: 'ok', body, sizeBytes: totalBytes }
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Legacy redirect helper (1 segment: /wh/[slug])
 // ─────────────────────────────────────────────────────────────────────────────
 
 async function handleLegacyRedirect(req: NextRequest, slug: string): Promise<NextResponse> {
+  const log = createRequestLogger('webhook-legacy')
   const supabase = createAdminClient()
 
   // Look up all endpoints with this slug (after migration, multiple users can share a slug)
@@ -37,7 +103,7 @@ async function handleLegacyRedirect(req: NextRequest, slug: string): Promise<Nex
     .limit(2)
 
   if (endpointError) {
-    console.error('[webhook] legacy redirect endpoint lookup error:', endpointError)
+    log.error({ err: endpointError, slug }, 'endpoint lookup failed')
   }
 
   if (!endpoints || endpoints.length === 0) {
@@ -64,7 +130,7 @@ async function handleLegacyRedirect(req: NextRequest, slug: string): Promise<Nex
     .single()
 
   if (profileError) {
-    console.error('[webhook] legacy redirect profile lookup error:', profileError)
+    log.error({ err: profileError, slug }, 'profile lookup failed')
   }
 
   if (!profile?.username) {
@@ -87,6 +153,7 @@ async function handleWebhookCapture(
   username: string,
   slug: string
 ): Promise<NextResponse> {
+  const log = createRequestLogger('webhook')
   const sourceIp = getSourceIp(req)
 
   // 1. Rate limiting checks — BEFORE any database queries
@@ -132,7 +199,7 @@ async function handleWebhookCapture(
     }
   } catch (error) {
     // Fail open: if rate limiting itself throws, allow the request
-    console.error('[webhook] Rate limiting check failed, allowing request:', error)
+    log.error({ err: error }, 'rate limiting check failed, allowing request')
   }
 
   const supabase = createAdminClient()
@@ -145,7 +212,7 @@ async function handleWebhookCapture(
     .single()
 
   if (profileError && profileError.code !== 'PGRST116') {
-    console.error('[webhook] profile lookup error:', profileError)
+    log.error({ err: profileError, username }, 'profile lookup failed')
   }
 
   if (!profile) {
@@ -163,7 +230,7 @@ async function handleWebhookCapture(
     .single()
 
   if (endpointError && endpointError.code !== 'PGRST116') {
-    console.error('[webhook] endpoint lookup error:', endpointError)
+    log.error({ err: endpointError, username, slug }, 'endpoint lookup failed')
   }
 
   if (endpointError || !endpoint) {
@@ -179,12 +246,19 @@ async function handleWebhookCapture(
     return NextResponse.json({ error: 'Not found' }, { status: 404, headers: notFoundHeaders })
   }
 
-  // 4. Read body (must read before checking size)
-  const body = await req.text()
+  // 4. Read body with streaming size limit
+  const readResult = await readBodyWithLimit(req, MAX_BODY_SIZE, log)
 
-  // Use byte length, not character count — multi-byte chars would pass .length check
-  const sizeBytes = body ? new TextEncoder().encode(body).length : 0
-  if (sizeBytes > MAX_BODY_SIZE) {
+  if (readResult.status === 'stream_error') {
+    const errorHeaders = new Headers()
+    applyRateLimitHeaders(errorHeaders, primaryResult)
+    return NextResponse.json(
+      { error: 'Failed to read request body' },
+      { status: 500, headers: errorHeaders }
+    )
+  }
+
+  if (readResult.status === 'too_large') {
     const tooLargeHeaders = new Headers()
     applyRateLimitHeaders(tooLargeHeaders, primaryResult)
     return NextResponse.json(
@@ -192,6 +266,8 @@ async function handleWebhookCapture(
       { status: 413, headers: tooLargeHeaders }
     )
   }
+
+  const { body, sizeBytes } = readResult
 
   // 5. Check usage limits
   const { data: subscription } = await supabase
@@ -230,8 +306,11 @@ async function handleWebhookCapture(
   })
 
   if (insertError) {
-    console.error('[webhook] request insert error:', insertError)
+    log.error({ err: insertError, endpointId: endpoint.id }, 'request insert failed')
+    return NextResponse.json({ error: 'Failed to capture request' }, { status: 500 })
   }
+
+  log.info({ endpointId: endpoint.id, method: req.method, sizeBytes }, 'webhook captured')
 
   // 7. Increment usage counter
   const { error: rpcError } = await supabase.rpc('increment_request_count', {
@@ -239,7 +318,7 @@ async function handleWebhookCapture(
   })
 
   if (rpcError) {
-    console.error('[webhook] increment_request_count error:', rpcError)
+    log.error({ err: rpcError, userId: endpoint.user_id }, 'increment_request_count failed')
   }
 
   // 8. Return configured response
@@ -284,7 +363,8 @@ export async function handleWebhook(
 
     return NextResponse.json({ error: 'Not found' }, { status: 404 })
   } catch (err) {
-    console.error('[webhook] unhandled error:', err)
+    const log = createRequestLogger('webhook')
+    log.error({ err }, 'unhandled error')
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }

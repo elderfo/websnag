@@ -14,6 +14,23 @@ vi.mock('@/lib/supabase/admin', () => ({
   createAdminClient: () => mockSupabase,
 }))
 
+// Mock the logger module
+vi.mock('@/lib/logger', () => ({
+  createLogger: () => ({
+    info: vi.fn(),
+    error: vi.fn(),
+    warn: vi.fn(),
+    debug: vi.fn(),
+  }),
+  createRequestLogger: () => ({
+    info: vi.fn(),
+    error: vi.fn(),
+    warn: vi.fn(),
+    debug: vi.fn(),
+    requestId: 'test-request-id',
+  }),
+}))
+
 // Mock the rate limit module
 const mockCheckSlugRateLimit = vi.fn()
 const mockCheckIpRateLimit = vi.fn()
@@ -295,6 +312,20 @@ describe('handleWebhook (namespaced route /wh/[username]/[slug])', () => {
     expect(res.status).toBe(413)
   })
 
+  it('rejects immediately when Content-Length header exceeds 1MB', async () => {
+    // Small actual body but Content-Length claims 2MB
+    const req = createRequest('POST', {
+      body: '{"small": true}',
+      headers: { 'Content-Length': '2000000' },
+    })
+
+    const res = await handleWebhook(req, { params })
+
+    expect(res.status).toBe(413)
+    const json = await res.json()
+    expect(json.error).toBe('Payload too large')
+  })
+
   it('does not enforce limit for pro users', async () => {
     subscriptionChain = setupSubscriptionQuery({ plan: 'pro', status: 'active' })
     mockFrom.mockImplementation((table: string) => {
@@ -499,8 +530,10 @@ describe('handleWebhook (namespaced route /wh/[username]/[slug])', () => {
     const req = createRequest('POST', { body: '{}' })
     const res = await handleWebhook(req, { params })
 
-    // Response still goes through — don't penalise the webhook sender
-    expect(res.status).toBe(200)
+    // Insert failure now returns 500 so the webhook sender knows capture failed
+    expect(res.status).toBe(500)
+    const json = await res.json()
+    expect(json.error).toBe('Failed to capture request')
     expect(insertWithError.insert).toHaveBeenCalled()
   })
 
@@ -762,6 +795,132 @@ describe('handleWebhook (namespaced route /wh/[username]/[slug])', () => {
     const res = await handleWebhook(req, { params })
 
     expect(res.status).toBe(200)
+  })
+})
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Slug enumeration hardening (#10)
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('slug enumeration hardening (#10)', () => {
+  let profileChain: ReturnType<typeof setupProfileQuery>
+  let endpointChain: ReturnType<typeof setupEndpointQuery>
+  let subscriptionChain: ReturnType<typeof setupSubscriptionQuery>
+
+  const params = Promise.resolve({ segments: ['johndoe', 'test-slug'] })
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+
+    profileChain = setupProfileQuery(mockProfile)
+    endpointChain = setupEndpointQuery(mockEndpoint)
+    subscriptionChain = setupSubscriptionQuery({ plan: 'free', status: 'active' })
+
+    mockFrom.mockImplementation((table: string) => {
+      if (table === 'profiles') return profileChain
+      if (table === 'endpoints') return endpointChain
+      if (table === 'subscriptions') return subscriptionChain
+      return {}
+    })
+
+    mockRpc.mockImplementation((fn: string) => {
+      if (fn === 'get_current_usage') {
+        return Promise.resolve({ data: [{ request_count: 5, ai_analysis_count: 0 }] })
+      }
+      return Promise.resolve({ data: null, error: null })
+    })
+
+    // Disable rate limit headers so comparison is clean
+    mockCheckSlugRateLimit.mockResolvedValue(null)
+    mockCheckIpRateLimit.mockResolvedValue(null)
+  })
+
+  async function capture404Response(
+    scenario: 'profile-not-found' | 'endpoint-not-found' | 'endpoint-inactive' | 'over-quota'
+  ): Promise<{ status: number; body: string; headerEntries: [string, string][] }> {
+    switch (scenario) {
+      case 'profile-not-found': {
+        const chain = setupProfileQuery(null, { code: 'PGRST116' })
+        mockFrom.mockImplementation((table: string) => {
+          if (table === 'profiles') return chain
+          return {}
+        })
+        break
+      }
+      case 'endpoint-not-found': {
+        const chain = setupEndpointQuery(null, { code: 'PGRST116' })
+        mockFrom.mockImplementation((table: string) => {
+          if (table === 'profiles') return profileChain
+          if (table === 'endpoints') return chain
+          return {}
+        })
+        break
+      }
+      case 'endpoint-inactive': {
+        const chain = setupEndpointQuery({ ...mockEndpoint, is_active: false })
+        mockFrom.mockImplementation((table: string) => {
+          if (table === 'profiles') return profileChain
+          if (table === 'endpoints') return chain
+          return {}
+        })
+        break
+      }
+      case 'over-quota': {
+        // Reset mockFrom to return an active endpoint so the over-quota branch is actually exercised
+        const activeChain = setupEndpointQuery(mockEndpoint)
+        const subChain = setupSubscriptionQuery({ plan: 'free', status: 'active' })
+        mockFrom.mockImplementation((table: string) => {
+          if (table === 'profiles') return profileChain
+          if (table === 'endpoints') return activeChain
+          if (table === 'subscriptions') return subChain
+          return {}
+        })
+        mockRpc.mockImplementation((fn: string) => {
+          if (fn === 'get_current_usage') {
+            return Promise.resolve({ data: [{ request_count: 100, ai_analysis_count: 0 }] })
+          }
+          return Promise.resolve({ data: null, error: null })
+        })
+        break
+      }
+    }
+
+    const req = createRequest('POST', { body: '{}' })
+    const res = await handleWebhook(req, { params })
+    const body = await res.text()
+    const headerEntries = [...res.headers.entries()].sort(([a], [b]) => a.localeCompare(b))
+
+    return { status: res.status, body, headerEntries }
+  }
+
+  it('returns byte-identical response bodies for all 404 scenarios', async () => {
+    const profileNotFound = await capture404Response('profile-not-found')
+    const endpointNotFound = await capture404Response('endpoint-not-found')
+    const endpointInactive = await capture404Response('endpoint-inactive')
+    const overQuota = await capture404Response('over-quota')
+
+    // All must be 404
+    expect(profileNotFound.status).toBe(404)
+    expect(endpointNotFound.status).toBe(404)
+    expect(endpointInactive.status).toBe(404)
+    expect(overQuota.status).toBe(404)
+
+    // All response bodies must be byte-identical
+    expect(endpointNotFound.body).toBe(profileNotFound.body)
+    expect(endpointInactive.body).toBe(profileNotFound.body)
+    expect(overQuota.body).toBe(profileNotFound.body)
+  })
+
+  it('returns identical headers (key+value) for all 404 scenarios', async () => {
+    const profileNotFound = await capture404Response('profile-not-found')
+    const endpointNotFound = await capture404Response('endpoint-not-found')
+    const endpointInactive = await capture404Response('endpoint-inactive')
+    const overQuota = await capture404Response('over-quota')
+
+    // All header key+value pairs must be identical — prevents info leakage via differing headers
+    expect(endpointNotFound.headerEntries).toEqual(profileNotFound.headerEntries)
+    expect(endpointInactive.headerEntries).toEqual(profileNotFound.headerEntries)
+    expect(overQuota.headerEntries).toEqual(profileNotFound.headerEntries)
   })
 })
 

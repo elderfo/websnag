@@ -33,6 +33,19 @@ vi.mock('@/lib/stripe', () => ({
   },
 }))
 
+const mockLogError = vi.fn()
+const mockLogInfo = vi.fn()
+
+vi.mock('@/lib/logger', () => ({
+  createRequestLogger: () => ({
+    info: (...args: unknown[]) => mockLogInfo(...args),
+    error: (...args: unknown[]) => mockLogError(...args),
+    warn: vi.fn(),
+    debug: vi.fn(),
+    requestId: 'test-request-id',
+  }),
+}))
+
 // Helper to create a chainable query mock
 function createChain(result: { data?: unknown; error?: unknown }) {
   const terminal = vi.fn().mockResolvedValue(result)
@@ -140,8 +153,6 @@ describe('POST /api/account/delete', () => {
     mockSubscriptionsCancel.mockRejectedValue(new Error('Stripe API error'))
     mockDeleteUser.mockResolvedValue({ error: null })
 
-    const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
-
     const { POST } = await import('../route')
     const response = await POST()
 
@@ -149,13 +160,11 @@ describe('POST /api/account/delete', () => {
     const body = await response.json()
     expect(body.success).toBe(true)
 
-    expect(consoleSpy).toHaveBeenCalledWith(
-      '[account-delete] failed to cancel Stripe subscription:',
-      expect.any(Error)
+    expect(mockLogError).toHaveBeenCalledWith(
+      { err: expect.any(Error) },
+      'failed to cancel Stripe subscription'
     )
     expect(mockDeleteUser).toHaveBeenCalledWith('user-1')
-
-    consoleSpy.mockRestore()
   })
 
   it('returns 500 when admin deleteUser fails', async () => {
@@ -168,22 +177,16 @@ describe('POST /api/account/delete', () => {
       error: { message: 'admin delete failed' },
     })
 
-    const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
-
     const { POST } = await import('../route')
     const response = await POST()
 
     expect(response.status).toBe(500)
     const body = await response.json()
     expect(body.error).toBe('Failed to delete account')
-
-    consoleSpy.mockRestore()
   })
 
   it('returns 500 on unhandled error', async () => {
     mockGetUser.mockRejectedValue(new Error('auth service down'))
-
-    const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
 
     const { POST } = await import('../route')
     const response = await POST()
@@ -191,8 +194,6 @@ describe('POST /api/account/delete', () => {
     expect(response.status).toBe(500)
     const body = await response.json()
     expect(body.error).toBe('Internal server error')
-
-    consoleSpy.mockRestore()
   })
 
   it('logs subscription lookup errors but proceeds with deletion', async () => {
@@ -204,8 +205,6 @@ describe('POST /api/account/delete', () => {
     mockAdminFrom.mockReturnValue(createChain({ data: null, error: subError }))
     mockDeleteUser.mockResolvedValue({ error: null })
 
-    const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
-
     const { POST } = await import('../route')
     const response = await POST()
 
@@ -213,12 +212,10 @@ describe('POST /api/account/delete', () => {
     const body = await response.json()
     expect(body.success).toBe(true)
 
-    expect(consoleSpy).toHaveBeenCalledWith(
-      '[account-delete] subscription lookup failed:',
-      subError
+    expect(mockLogError).toHaveBeenCalledWith(
+      { err: subError },
+      'subscription lookup failed'
     )
     expect(mockDeleteUser).toHaveBeenCalledWith('user-1')
-
-    consoleSpy.mockRestore()
   })
 })

@@ -1,9 +1,11 @@
 import Stripe from 'stripe'
 import { stripe } from '@/lib/stripe'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { createRequestLogger } from '@/lib/logger'
 import { NextResponse } from 'next/server'
 
 export async function POST(req: Request) {
+  const log = createRequestLogger('stripe-webhook')
   const body = await req.text()
   const signature = req.headers.get('stripe-signature')
 
@@ -14,7 +16,8 @@ export async function POST(req: Request) {
   let event: Stripe.Event
   try {
     event = stripe.webhooks.constructEvent(body, signature, process.env.STRIPE_WEBHOOK_SECRET!)
-  } catch {
+  } catch (error) {
+    log.warn({ err: error }, 'Stripe webhook signature verification failed')
     return NextResponse.json({ error: 'Invalid signature' }, { status: 400 })
   }
 
@@ -41,7 +44,7 @@ export async function POST(req: Request) {
         }
       }
 
-      await supabase
+      const { error: checkoutError } = await supabase
         .from('subscriptions')
         .update({
           plan: 'pro',
@@ -51,6 +54,12 @@ export async function POST(req: Request) {
         })
         .eq('stripe_customer_id', customerId)
 
+      if (checkoutError) {
+        log.error({ err: checkoutError, customerId }, 'checkout subscription update failed')
+        return NextResponse.json({ error: 'Database update failed' }, { status: 500 })
+      }
+
+      log.info({ customerId, subscriptionId }, 'checkout completed, upgraded to pro')
       break
     }
 
@@ -73,16 +82,18 @@ export async function POST(req: Request) {
       // distinguish "renewing" from "canceling at period end". Requires a migration to add a
       // cancel_at_period_end BOOLEAN column to subscriptions before this value can be stored.
       // If canceled at period end, keep as 'pro' until period ends
+      let subUpdateError: unknown = null
       if (subscription.cancel_at_period_end) {
-        await supabase
+        const { error } = await supabase
           .from('subscriptions')
           .update({
             status: 'active',
             current_period_end: periodEnd,
           })
           .eq('stripe_customer_id', customerId)
+        subUpdateError = error
       } else if (isActive) {
-        await supabase
+        const { error } = await supabase
           .from('subscriptions')
           .update({
             plan: 'pro',
@@ -90,8 +101,9 @@ export async function POST(req: Request) {
             current_period_end: periodEnd,
           })
           .eq('stripe_customer_id', customerId)
+        subUpdateError = error
       } else {
-        await supabase
+        const { error } = await supabase
           .from('subscriptions')
           .update({
             plan: 'free',
@@ -99,8 +111,22 @@ export async function POST(req: Request) {
             current_period_end: periodEnd,
           })
           .eq('stripe_customer_id', customerId)
+        subUpdateError = error
       }
 
+      if (subUpdateError) {
+        log.error({ err: subUpdateError, customerId }, 'subscription update failed')
+        return NextResponse.json({ error: 'Database update failed' }, { status: 500 })
+      }
+
+      log.info(
+        {
+          customerId,
+          subscriptionStatus: subscription.status,
+          cancelAtPeriodEnd: subscription.cancel_at_period_end,
+        },
+        'subscription updated'
+      )
       break
     }
 
@@ -113,7 +139,7 @@ export async function POST(req: Request) {
 
       if (!customerId) break
 
-      await supabase
+      const { error: deleteError } = await supabase
         .from('subscriptions')
         .update({
           plan: 'free',
@@ -121,6 +147,12 @@ export async function POST(req: Request) {
         })
         .eq('stripe_customer_id', customerId)
 
+      if (deleteError) {
+        log.error({ err: deleteError, customerId }, 'subscription deletion update failed')
+        return NextResponse.json({ error: 'Database update failed' }, { status: 500 })
+      }
+
+      log.info({ customerId }, 'subscription deleted, downgraded to free')
       break
     }
 
@@ -131,13 +163,19 @@ export async function POST(req: Request) {
 
       if (!customerId) break
 
-      await supabase
+      const { error: paymentError } = await supabase
         .from('subscriptions')
         .update({
           status: 'past_due',
         })
         .eq('stripe_customer_id', customerId)
 
+      if (paymentError) {
+        log.error({ err: paymentError, customerId }, 'payment failed status update failed')
+        return NextResponse.json({ error: 'Database update failed' }, { status: 500 })
+      }
+
+      log.info({ customerId }, 'invoice payment failed, marked as past_due')
       break
     }
   }
