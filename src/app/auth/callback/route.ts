@@ -23,8 +23,7 @@ export async function GET(request: Request) {
           .maybeSingle()
 
         if (!profile?.username) {
-          const redirectParam =
-            next !== '/auth/redirect' ? `&redirect=${encodeURIComponent(next)}` : ''
+          const redirectParam = `&redirect=${encodeURIComponent(next)}`
           return NextResponse.redirect(`${origin}/settings?setup=username${redirectParam}`)
         }
       }

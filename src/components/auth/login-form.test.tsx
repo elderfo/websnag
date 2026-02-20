@@ -159,7 +159,7 @@ describe('LoginForm', () => {
     setItemSpy.mockRestore()
   })
 
-  it('does not store upgrade intent when no intent param is present', () => {
+  it('clears stale upgrade intent when no intent param is present', () => {
     Object.defineProperty(window, 'location', {
       value: {
         ...window.location,
@@ -169,11 +169,11 @@ describe('LoginForm', () => {
       writable: true,
     })
 
-    const setItemSpy = vi.spyOn(Storage.prototype, 'setItem')
+    const removeItemSpy = vi.spyOn(Storage.prototype, 'removeItem')
 
     render(<LoginForm />)
 
-    expect(setItemSpy).not.toHaveBeenCalledWith('upgrade_intent', 'true')
-    setItemSpy.mockRestore()
+    expect(removeItemSpy).toHaveBeenCalledWith('upgrade_intent')
+    removeItemSpy.mockRestore()
   })
 })
