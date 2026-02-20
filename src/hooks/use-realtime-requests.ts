@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import type { WebhookRequest, RequestFilters } from '@/types'
 
@@ -25,6 +25,11 @@ export function useRealtimeRequests(endpointId: string, filters: RequestFilters 
   const [error, setError] = useState<string | null>(null)
   const [hasMore, setHasMore] = useState(false)
   const [loadingMore, setLoadingMore] = useState(false)
+
+  // Ref holds the latest filters so the realtime subscription can use them
+  // without needing to be re-created whenever filters change.
+  const filtersRef = useRef(filters)
+  filtersRef.current = filters
 
   // Fetch with current filters
   const fetchRequests = useCallback(
@@ -70,6 +75,7 @@ export function useRealtimeRequests(endpointId: string, filters: RequestFilters 
   // Initial fetch (resets on filter change)
   useEffect(() => {
     let cancelled = false
+    setLoading(true)
 
     fetchRequests()
       .then(({ requests: data, hasMore: more }) => {
@@ -94,17 +100,23 @@ export function useRealtimeRequests(endpointId: string, filters: RequestFilters 
   // Load more (next page)
   const loadMore = useCallback(async () => {
     if (loadingMore || !hasMore || requests.length === 0) return
-
     setLoadingMore(true)
-    const lastRequest = requests[requests.length - 1]
-    const { requests: nextPage, hasMore: more } = await fetchRequests(lastRequest.received_at)
 
-    setRequests((prev) => [...prev, ...nextPage])
-    setHasMore(more)
-    setLoadingMore(false)
+    try {
+      const lastRequest = requests[requests.length - 1]
+      const { requests: nextPage, hasMore: more } = await fetchRequests(lastRequest.received_at)
+
+      setRequests((prev) => [...prev, ...nextPage])
+      setHasMore(more)
+    } catch {
+      setError('Failed to load more requests. Please try again.')
+    } finally {
+      setLoadingMore(false)
+    }
   }, [loadingMore, hasMore, requests, fetchRequests])
 
-  // Realtime subscription (unfiltered — new requests always arrive)
+  // Realtime subscription — depends only on endpointId; uses filtersRef to
+  // avoid re-creating the channel whenever filters change.
   useEffect(() => {
     const supabase = createClient()
 
@@ -120,8 +132,8 @@ export function useRealtimeRequests(endpointId: string, filters: RequestFilters 
         },
         (payload) => {
           const newRequest = payload.new as WebhookRequest
-          // Only prepend if it matches current filters
-          if (matchesFilters(newRequest, filters)) {
+          // Only prepend if it matches current filters (read from ref, not closure)
+          if (matchesFilters(newRequest, filtersRef.current)) {
             setRequests((prev) => [newRequest, ...prev])
           }
         }
@@ -131,7 +143,7 @@ export function useRealtimeRequests(endpointId: string, filters: RequestFilters 
     return () => {
       supabase.removeChannel(channel)
     }
-  }, [endpointId, filters])
+  }, [endpointId])
 
   // Remove a request from local state (after delete)
   const removeRequest = useCallback((id: string) => {

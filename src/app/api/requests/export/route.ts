@@ -1,6 +1,17 @@
+import { z } from 'zod'
 import { createClient } from '@/lib/supabase/server'
 import { createRequestLogger } from '@/lib/logger'
 import { NextResponse, type NextRequest } from 'next/server'
+
+const VALID_METHODS = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS'] as const
+
+const ExportQuerySchema = z.object({
+  endpointId: z.string().min(1, 'endpointId is required'),
+  method: z.enum(VALID_METHODS).optional(),
+  dateFrom: z.string().datetime({ offset: true }).optional(),
+  dateTo: z.string().datetime({ offset: true }).optional(),
+  search: z.string().optional(),
+})
 
 export async function GET(req: NextRequest) {
   const log = createRequestLogger('export-requests')
@@ -15,11 +26,23 @@ export async function GET(req: NextRequest) {
   }
 
   const { searchParams } = new URL(req.url)
-  const endpointId = searchParams.get('endpointId')
 
-  if (!endpointId) {
-    return NextResponse.json({ error: 'endpointId is required' }, { status: 400 })
+  const parsed = ExportQuerySchema.safeParse({
+    endpointId: searchParams.get('endpointId') ?? undefined,
+    method: searchParams.get('method') ?? undefined,
+    dateFrom: searchParams.get('dateFrom') ?? undefined,
+    dateTo: searchParams.get('dateTo') ?? undefined,
+    search: searchParams.get('search') ?? undefined,
+  })
+
+  if (!parsed.success) {
+    return NextResponse.json(
+      { error: 'Invalid request', details: parsed.error.issues },
+      { status: 400 }
+    )
   }
+
+  const { endpointId, method, dateFrom, dateTo, search } = parsed.data
 
   // Verify user owns the endpoint
   const { data: endpoint } = await supabase
@@ -43,22 +66,18 @@ export async function GET(req: NextRequest) {
     .order('received_at', { ascending: false })
     .limit(10000)
 
-  const method = searchParams.get('method')
   if (method) {
     query = query.eq('method', method)
   }
 
-  const dateFrom = searchParams.get('dateFrom')
   if (dateFrom) {
     query = query.gte('received_at', dateFrom)
   }
 
-  const dateTo = searchParams.get('dateTo')
   if (dateTo) {
     query = query.lte('received_at', dateTo)
   }
 
-  const search = searchParams.get('search')
   if (search) {
     query = query.ilike('body', `%${search}%`)
   }

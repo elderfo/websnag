@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, vi } from 'vitest'
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { RequestDetail } from './request-detail'
@@ -135,5 +135,29 @@ describe('RequestDetail', () => {
 
     expect(screen.getByLabelText('Target URL')).toBeInTheDocument()
     expect(screen.getByText('PRO')).toBeInTheDocument()
+  })
+
+  describe('onDelete prop', () => {
+    it('shows delete button when onDelete is provided', () => {
+      const onDelete = vi.fn()
+      render(<RequestDetail request={mockRequest} endpointUrl={endpointUrl} onDelete={onDelete} />)
+      expect(screen.getByRole('button', { name: /delete/i })).toBeInTheDocument()
+    })
+
+    it('does not show delete button when onDelete is not provided', () => {
+      render(<RequestDetail request={mockRequest} endpointUrl={endpointUrl} />)
+      expect(screen.queryByRole('button', { name: /delete/i })).not.toBeInTheDocument()
+    })
+
+    it('calls onDelete with the request id when delete button is clicked', async () => {
+      const user = userEvent.setup()
+      const onDelete = vi.fn()
+      render(<RequestDetail request={mockRequest} endpointUrl={endpointUrl} onDelete={onDelete} />)
+
+      await user.click(screen.getByRole('button', { name: /delete/i }))
+
+      expect(onDelete).toHaveBeenCalledOnce()
+      expect(onDelete).toHaveBeenCalledWith(mockRequest.id)
+    })
   })
 })
