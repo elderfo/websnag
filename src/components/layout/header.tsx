@@ -1,23 +1,15 @@
 'use client'
 
-import { useRouter } from 'next/navigation'
-import { createClient } from '@/lib/supabase/client'
+import { UserMenu } from '@/components/layout/user-menu'
+import type { Plan } from '@/types'
 
 interface HeaderProps {
   userEmail: string
+  plan: Plan
   mobileNav?: React.ReactNode
 }
 
-export function Header({ userEmail, mobileNav }: HeaderProps) {
-  const router = useRouter()
-  const initial = userEmail.charAt(0).toUpperCase()
-
-  const handleSignOut = async () => {
-    const supabase = createClient()
-    await supabase.auth.signOut()
-    router.push('/login')
-  }
-
+export function Header({ userEmail, plan, mobileNav }: HeaderProps) {
   return (
     <header className="flex h-14 items-center justify-between border-b border-border px-4 sm:px-6">
       <div className="flex items-center gap-2">
@@ -25,18 +17,7 @@ export function Header({ userEmail, mobileNav }: HeaderProps) {
         {/* Mobile logo — visible only when sidebar is hidden */}
         <span className="font-mono text-lg font-bold text-accent lg:hidden">websnag</span>
       </div>
-      <div className="flex items-center gap-2 sm:gap-3">
-        <span className="hidden text-sm text-text-secondary sm:inline">{userEmail}</span>
-        <div className="flex h-8 w-8 items-center justify-center rounded-full bg-accent/10 text-sm font-medium text-accent">
-          {initial}
-        </div>
-        <button
-          onClick={handleSignOut}
-          className="rounded-md px-2 py-1.5 text-sm text-text-muted transition-colors hover:bg-white/5 hover:text-text-primary sm:px-3"
-        >
-          Sign out
-        </button>
-      </div>
+      <UserMenu email={userEmail} plan={plan} />
     </header>
   )
 }
