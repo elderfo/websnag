@@ -4,7 +4,7 @@ import { NextResponse } from 'next/server'
 export async function GET(request: Request) {
   const { searchParams, origin } = new URL(request.url)
   const code = searchParams.get('code')
-  const next = searchParams.get('next') ?? '/dashboard'
+  const next = searchParams.get('next') ?? '/auth/redirect'
 
   if (code) {
     const supabase = await createClient()
@@ -23,7 +23,8 @@ export async function GET(request: Request) {
           .maybeSingle()
 
         if (!profile?.username) {
-          const redirectParam = next !== '/dashboard' ? `&redirect=${encodeURIComponent(next)}` : ''
+          const redirectParam =
+            next !== '/auth/redirect' ? `&redirect=${encodeURIComponent(next)}` : ''
           return NextResponse.redirect(`${origin}/settings?setup=username${redirectParam}`)
         }
       }
