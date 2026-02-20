@@ -65,12 +65,18 @@ export function useRealtimeRequests(endpointId: string, filters: RequestFilters 
 
   // Initial fetch (resets on filter change)
   useEffect(() => {
-    setLoading(true)
+    let cancelled = false
+
     fetchRequests().then(({ requests: data, hasMore: more }) => {
+      if (cancelled) return
+      setLoading(false)
       setRequests(data)
       setHasMore(more)
-      setLoading(false)
     })
+
+    return () => {
+      cancelled = true
+    }
   }, [fetchRequests])
 
   // Load more (next page)
