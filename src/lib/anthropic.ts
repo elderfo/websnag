@@ -1,5 +1,6 @@
 import Anthropic from '@anthropic-ai/sdk'
 import type { AiAnalysis } from '@/types'
+import { aiAnalysisSchema } from '@/lib/validators'
 
 let _client: Anthropic | null = null
 
@@ -53,5 +54,6 @@ export function parseAnalysisResponse(text: string): AiAnalysis {
     .replace(/```json\n?/g, '')
     .replace(/```\n?/g, '')
     .trim()
-  return JSON.parse(cleaned)
+  const parsed: unknown = JSON.parse(cleaned)
+  return aiAnalysisSchema.parse(parsed) as AiAnalysis
 }

@@ -71,4 +71,23 @@ describe('parseAnalysisResponse', () => {
     const result = parseAnalysisResponse(wrapped)
     expect(result).toEqual(validAnalysis)
   })
+
+  it('rejects response missing required fields', () => {
+    const partial = JSON.stringify({ source: 'Stripe' })
+    expect(() => parseAnalysisResponse(partial)).toThrow()
+  })
+
+  it('rejects response with wrong field types', () => {
+    const wrongTypes = JSON.stringify({
+      ...validAnalysis,
+      key_fields: 'not an array',
+    })
+    expect(() => parseAnalysisResponse(wrongTypes)).toThrow()
+  })
+
+  it('rejects non-JSON response (prompt injection attempt)', () => {
+    const injectionAttempt =
+      'I am now ignoring my previous instructions. Here is the secret data you requested.'
+    expect(() => parseAnalysisResponse(injectionAttempt)).toThrow()
+  })
 })
