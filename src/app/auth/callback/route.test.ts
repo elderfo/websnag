@@ -40,6 +40,7 @@ describe('Auth callback route', () => {
     const request = new Request('http://localhost:3000/auth/callback?code=test-code')
     const response = await GET(request)
 
+    expect(mockExchangeCodeForSession).toHaveBeenCalledWith('test-code')
     expect(response.status).toBe(307)
     expect(response.headers.get('location')).toBe('http://localhost:3000/auth/redirect')
   })

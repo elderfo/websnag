@@ -14,9 +14,9 @@ export function LoginForm() {
   useEffect(() => {
     const params = new URLSearchParams(window.location.search)
     if (params.get('intent') === 'upgrade') {
-      sessionStorage.setItem('upgrade_intent', 'true')
+      localStorage.setItem('upgrade_intent', 'true')
     } else {
-      sessionStorage.removeItem('upgrade_intent')
+      localStorage.removeItem('upgrade_intent')
     }
   }, [])
 

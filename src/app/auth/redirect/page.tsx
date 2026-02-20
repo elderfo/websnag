@@ -8,10 +8,10 @@ export default function AuthRedirectPage() {
 
   useEffect(() => {
     async function handleRedirect() {
-      const intent = sessionStorage.getItem('upgrade_intent')
+      const intent = localStorage.getItem('upgrade_intent')
 
       if (intent === 'true') {
-        sessionStorage.removeItem('upgrade_intent')
+        localStorage.removeItem('upgrade_intent')
 
         try {
           const res = await fetch('/api/stripe/checkout', { method: 'POST' })

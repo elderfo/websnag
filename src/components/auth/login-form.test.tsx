@@ -28,6 +28,7 @@ function getInput(label: RegExp) {
 describe('LoginForm', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    localStorage.clear()
     mockSignInWithOAuth.mockResolvedValue({ error: null })
     mockSignInWithOtp.mockResolvedValue({ error: null })
   })
@@ -140,7 +141,7 @@ describe('LoginForm', () => {
     expect(getButton(/send magic link/i)).toBeInTheDocument()
   })
 
-  it('stores upgrade intent in sessionStorage when intent=upgrade is in URL', () => {
+  it('stores upgrade intent in localStorage when intent=upgrade is in URL', () => {
     // Mock window.location.search
     Object.defineProperty(window, 'location', {
       value: {
@@ -151,15 +152,14 @@ describe('LoginForm', () => {
       writable: true,
     })
 
-    const setItemSpy = vi.spyOn(Storage.prototype, 'setItem')
-
     render(<LoginForm />)
 
-    expect(setItemSpy).toHaveBeenCalledWith('upgrade_intent', 'true')
-    setItemSpy.mockRestore()
+    expect(localStorage.getItem('upgrade_intent')).toBe('true')
   })
 
-  it('clears stale upgrade intent when no intent param is present', () => {
+  it('clears stale upgrade intent from localStorage when no intent param is present', () => {
+    localStorage.setItem('upgrade_intent', 'true')
+
     Object.defineProperty(window, 'location', {
       value: {
         ...window.location,
@@ -169,11 +169,8 @@ describe('LoginForm', () => {
       writable: true,
     })
 
-    const removeItemSpy = vi.spyOn(Storage.prototype, 'removeItem')
-
     render(<LoginForm />)
 
-    expect(removeItemSpy).toHaveBeenCalledWith('upgrade_intent')
-    removeItemSpy.mockRestore()
+    expect(localStorage.getItem('upgrade_intent')).toBeNull()
   })
 })

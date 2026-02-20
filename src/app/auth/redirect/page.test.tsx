@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { render, screen, waitFor } from '@testing-library/react'
 import AuthRedirectPage from './page'
 
@@ -13,7 +13,11 @@ vi.mock('next/navigation', () => ({
 describe('AuthRedirectPage', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    sessionStorage.clear()
+    localStorage.clear()
+  })
+
+  afterEach(() => {
+    vi.unstubAllGlobals()
   })
 
   it('shows loading state', () => {
@@ -30,7 +34,7 @@ describe('AuthRedirectPage', () => {
   })
 
   it('calls checkout API and redirects to Stripe when upgrade intent is set', async () => {
-    sessionStorage.setItem('upgrade_intent', 'true')
+    localStorage.setItem('upgrade_intent', 'true')
 
     Object.defineProperty(window, 'location', {
       value: { href: '' },
@@ -48,12 +52,12 @@ describe('AuthRedirectPage', () => {
       expect(mockFetch).toHaveBeenCalledWith('/api/stripe/checkout', { method: 'POST' })
     })
 
-    expect(sessionStorage.getItem('upgrade_intent')).toBeNull()
+    expect(localStorage.getItem('upgrade_intent')).toBeNull()
     expect(window.location.href).toBe('https://checkout.stripe.com/session_123')
   })
 
   it('falls back to /dashboard when checkout API fails', async () => {
-    sessionStorage.setItem('upgrade_intent', 'true')
+    localStorage.setItem('upgrade_intent', 'true')
 
     const mockFetch = vi.fn().mockRejectedValue(new Error('Network error'))
     vi.stubGlobal('fetch', mockFetch)
@@ -64,6 +68,6 @@ describe('AuthRedirectPage', () => {
       expect(mockReplace).toHaveBeenCalledWith('/dashboard')
     })
 
-    expect(sessionStorage.getItem('upgrade_intent')).toBeNull()
+    expect(localStorage.getItem('upgrade_intent')).toBeNull()
   })
 })
