@@ -23,13 +23,22 @@ function isRecentRequest(request: WebhookRequest): boolean {
 
 export function RequestFeed({ endpointId, endpointUrl }: RequestFeedProps) {
   const [filters, setFilters] = useState<RequestFilters>({})
-  const { requests, loading, hasMore, loadingMore, loadMore, removeRequest, removeRequests } =
-    useRealtimeRequests(endpointId, filters)
+  const {
+    requests,
+    loading,
+    error,
+    hasMore,
+    loadingMore,
+    loadMore,
+    removeRequest,
+    removeRequests,
+  } = useRealtimeRequests(endpointId, filters)
 
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [checkedIds, setCheckedIds] = useState<Set<string>>(new Set())
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null)
   const [deleting, setDeleting] = useState(false)
+  const [deleteError, setDeleteError] = useState<string | null>(null)
 
   const selectedRequest = requests.find((r) => r.id === selectedId) ?? null
   const showCheckboxes = checkedIds.size > 0
@@ -62,12 +71,15 @@ export function RequestFeed({ endpointId, endpointUrl }: RequestFeedProps) {
   async function handleSingleDelete() {
     if (!deleteConfirm) return
     setDeleting(true)
+    setDeleteError(null)
     try {
       const res = await fetch(`/api/requests/${deleteConfirm}`, { method: 'DELETE' })
       if (res.ok) {
         removeRequest(deleteConfirm)
         if (selectedId === deleteConfirm) setSelectedId(null)
       }
+    } catch {
+      setDeleteError('Failed to delete request. Please try again.')
     } finally {
       setDeleting(false)
       setDeleteConfirm(null)
@@ -137,6 +149,12 @@ export function RequestFeed({ endpointId, endpointUrl }: RequestFeedProps) {
   return (
     <div className="space-y-3">
       <FilterBar filters={filters} onFiltersChange={setFilters} />
+
+      {(error || deleteError) && (
+        <div className="rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-400">
+          {error || deleteError}
+        </div>
+      )}
 
       <BulkActions
         selectedCount={checkedIds.size}
