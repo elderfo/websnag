@@ -23,21 +23,28 @@ export default async function DashboardPage() {
   }
 
   // Fetch remaining data in parallel (user was fetched above for RPC param)
-  const [endpointsResult, recentRequestsResult, todayCountResult, subscriptionResult, usageResult] =
-    await Promise.all([
-      supabase.from('endpoints').select('id, name, slug, is_active'),
-      supabase
-        .from('requests')
-        .select('id, endpoint_id, method, size_bytes, received_at')
-        .order('received_at', { ascending: false })
-        .limit(10),
-      supabase
-        .from('requests')
-        .select('*', { count: 'exact', head: true })
-        .gte('received_at', getTodayStart()),
-      supabase.from('subscriptions').select('plan, status').maybeSingle(),
-      supabase.rpc('get_current_usage', { p_user_id: user.id }),
-    ])
+  const [
+    endpointsResult,
+    recentRequestsResult,
+    todayCountResult,
+    subscriptionResult,
+    usageResult,
+    profileResult,
+  ] = await Promise.all([
+    supabase.from('endpoints').select('id, name, slug, is_active'),
+    supabase
+      .from('requests')
+      .select('id, endpoint_id, method, size_bytes, received_at')
+      .order('received_at', { ascending: false })
+      .limit(10),
+    supabase
+      .from('requests')
+      .select('*', { count: 'exact', head: true })
+      .gte('received_at', getTodayStart()),
+    supabase.from('subscriptions').select('plan, status').maybeSingle(),
+    supabase.rpc('get_current_usage', { p_user_id: user.id }),
+    supabase.from('profiles').select('username').eq('id', user.id).maybeSingle(),
+  ])
 
   // Throw on errors to trigger error boundary
   if (endpointsResult.error) throw new Error(endpointsResult.error.message)
@@ -50,6 +57,7 @@ export default async function DashboardPage() {
   const todayCount = todayCountResult.count ?? 0
   const subscription = subscriptionResult.data
   const usage = usageResult.data
+  const hasUsername = !!profileResult.data?.username
 
   const plan = getUserPlan(subscription)
   const requestCount = Array.isArray(usage) ? (usage[0]?.request_count ?? 0) : 0
@@ -62,6 +70,25 @@ export default async function DashboardPage() {
           <UpgradeBanner />
         </Suspense>
         <h1 className="text-2xl font-bold text-text-primary">Dashboard</h1>
+        {!hasUsername && (
+          <div className="mt-4 rounded-lg border border-accent/30 bg-accent/5 px-4 py-3">
+            <p className="text-sm font-medium text-text-primary">
+              Set your username to get started
+            </p>
+            <p className="mt-1 text-sm text-text-secondary">
+              Your username becomes part of your webhook URL:{' '}
+              <span className="font-mono text-text-muted">
+                websnag.dev/wh/<span className="text-accent">your-username</span>/slug
+              </span>
+            </p>
+            <Link
+              href="/settings?setup=username"
+              className="mt-3 inline-flex items-center justify-center rounded-md bg-accent px-3 py-1.5 text-xs font-medium text-black transition-colors hover:bg-accent-hover"
+            >
+              Set username
+            </Link>
+          </div>
+        )}
         <div className="mt-12 rounded-lg border border-dashed border-border p-12 text-center">
           <p className="text-lg font-medium text-text-primary">Welcome to Websnag</p>
           <p className="mt-2 text-sm text-text-muted">
@@ -96,6 +123,24 @@ export default async function DashboardPage() {
       <Suspense fallback={null}>
         <UpgradeBanner />
       </Suspense>
+      {!hasUsername && (
+        <div className="mb-6 rounded-lg border border-accent/30 bg-accent/5 px-4 py-3">
+          <p className="text-sm font-medium text-text-primary">Set your username to get started</p>
+          <p className="mt-1 text-sm text-text-secondary">
+            Your username becomes part of your webhook URL:{' '}
+            <span className="font-mono text-text-muted">
+              websnag.dev/wh/<span className="text-accent">your-username</span>/slug
+            </span>
+          </p>
+          <Link
+            href="/settings?setup=username"
+            className="mt-3 inline-flex items-center justify-center rounded-md bg-accent px-3 py-1.5 text-xs font-medium text-black transition-colors hover:bg-accent-hover"
+          >
+            Set username
+          </Link>
+        </div>
+      )}
+
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold text-text-primary">Dashboard</h1>
         <RefreshButton />
