@@ -39,7 +39,14 @@ export async function POST(): Promise<NextResponse> {
       return NextResponse.json({ error: 'Retention cleanup failed' }, { status: 500 })
     }
 
-    const result = (data as RetentionResult[])[0]
+    const resultArray = data as RetentionResult[] | null
+    const result = resultArray?.[0]
+
+    if (!result) {
+      console.error('[retention] cleanup RPC returned no result')
+      return NextResponse.json({ error: 'Retention cleanup returned no result' }, { status: 500 })
+    }
+
     return NextResponse.json({
       free_deleted: result.free_deleted,
       pro_deleted: result.pro_deleted,

@@ -111,4 +111,23 @@ describe('POST /api/admin/retention', () => {
 
     consoleSpy.mockRestore()
   })
+
+  it('returns 500 when RPC returns null data without error', async () => {
+    process.env.ADMIN_USER_IDS = 'user-1'
+    mockGetUser.mockResolvedValue({
+      data: { user: { id: 'user-1' } },
+    })
+    mockRpc.mockResolvedValue({ data: null, error: null })
+
+    const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+
+    const { POST } = await import('../route')
+    const response = await POST()
+
+    expect(response.status).toBe(500)
+    const body = await response.json()
+    expect(body.error).toBe('Retention cleanup returned no result')
+
+    consoleSpy.mockRestore()
+  })
 })

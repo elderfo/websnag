@@ -16,7 +16,7 @@ BEGIN
     WHERE r.received_at < now() - interval '24 hours'
       AND r.endpoint_id IN (
         SELECT e.id FROM endpoints e
-        LEFT JOIN subscriptions s ON s.user_id = e.user_id AND s.plan = 'pro' AND s.status = 'active'
+        LEFT JOIN subscriptions s ON s.user_id = e.user_id AND s.plan = 'pro' AND s.status IN ('active', 'trialing')
         WHERE s.user_id IS NULL
       )
     RETURNING 1
@@ -30,7 +30,7 @@ BEGIN
       AND r.endpoint_id IN (
         SELECT e.id FROM endpoints e
         INNER JOIN subscriptions s ON s.user_id = e.user_id
-        WHERE s.plan = 'pro' AND s.status = 'active'
+        WHERE s.plan = 'pro' AND s.status IN ('active', 'trialing')
       )
     RETURNING 1
   )
