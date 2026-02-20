@@ -44,6 +44,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
       <div className="lg:pl-60">
         <Header
           userEmail={user.email ?? ''}
+          plan={plan}
           mobileNav={
             <MobileNav requestCount={requestCount} maxRequests={limits.maxRequestsPerMonth} />
           }
