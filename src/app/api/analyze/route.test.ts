@@ -171,4 +171,42 @@ describe('POST /api/analyze', () => {
       'application/json'
     )
   })
+
+  it('returns 502 when AI returns unparseable response', async () => {
+    mockGetUser.mockResolvedValue({ data: { user: { id: 'user-1' } } })
+
+    mockFrom.mockImplementation((table: string) => {
+      if (table === 'requests') {
+        return {
+          select: () => ({
+            eq: () => ({
+              single: () => Promise.resolve({ data: mockWebhookRequest }),
+            }),
+          }),
+        }
+      }
+      if (table === 'subscriptions') {
+        return {
+          select: () => ({
+            eq: () => ({
+              single: () => Promise.resolve({ data: { plan: 'free', status: 'active' } }),
+            }),
+          }),
+        }
+      }
+      return { select: () => ({ eq: () => ({ single: () => Promise.resolve({ data: null }) }) }) }
+    })
+
+    // Usage under limit
+    mockAdminRpc.mockResolvedValue({ data: [{ ai_analysis_count: 2 }] })
+
+    // AI returns invalid response
+    mockAnalyzeWebhook.mockRejectedValue(new Error('Unexpected end of JSON input'))
+
+    const res = await POST(makeRequest({ requestId: '123e4567-e89b-12d3-a456-426614174000' }))
+    expect(res.status).toBe(502)
+
+    const data = await res.json()
+    expect(data.error).toBe('AI analysis produced an invalid response')
+  })
 })

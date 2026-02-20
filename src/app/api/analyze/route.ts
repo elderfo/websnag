@@ -4,6 +4,7 @@ import { analyzeWebhook } from '@/lib/anthropic'
 import { analyzeRequestSchema } from '@/lib/validators'
 import { canAnalyze, getUserPlan } from '@/lib/usage'
 import { NextResponse } from 'next/server'
+import type { AiAnalysis } from '@/types'
 
 export async function POST(req: Request) {
   try {
@@ -54,12 +55,21 @@ export async function POST(req: Request) {
     }
 
     // Call Claude
-    const analysis = await analyzeWebhook(
-      webhookRequest.method,
-      webhookRequest.headers,
-      webhookRequest.body,
-      webhookRequest.content_type
-    )
+    let analysis: AiAnalysis
+    try {
+      analysis = await analyzeWebhook(
+        webhookRequest.method,
+        webhookRequest.headers,
+        webhookRequest.body,
+        webhookRequest.content_type
+      )
+    } catch (error) {
+      console.error('AI analysis response validation failed:', error)
+      return NextResponse.json(
+        { error: 'AI analysis produced an invalid response' },
+        { status: 502 }
+      )
+    }
 
     // Store result
     await admin.from('requests').update({ ai_analysis: analysis }).eq('id', requestId)
