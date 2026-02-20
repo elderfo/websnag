@@ -136,6 +136,7 @@ describe('POST /api/stripe/webhook', () => {
       plan: 'pro',
       status: 'active',
       current_period_end: new Date(1700000000 * 1000).toISOString(),
+      cancel_at_period_end: false,
     })
   })
 
@@ -157,10 +158,10 @@ describe('POST /api/stripe/webhook', () => {
     const res = await POST(makeRequest('{}'))
     expect(res.status).toBe(200)
 
-    // Should keep status active (user stays pro until period end)
     expect(updateMock).toHaveBeenCalledWith({
       status: 'active',
       current_period_end: new Date(1700000000 * 1000).toISOString(),
+      cancel_at_period_end: true,
     })
   })
 
@@ -207,6 +208,7 @@ describe('POST /api/stripe/webhook', () => {
     expect(updateMock).toHaveBeenCalledWith({
       plan: 'free',
       status: 'canceled',
+      cancel_at_period_end: false,
     })
   })
 
