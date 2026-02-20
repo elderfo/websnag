@@ -49,6 +49,8 @@ websnag/
 │   │   ├── (auth)/
 │   │   │   ├── login/page.tsx
 │   │   │   └── callback/route.ts  # OAuth callback handler
+│   │   ├── auth/
+│   │   │   └── redirect/page.tsx  # Client-side post-auth redirect (handles upgrade intent)
 │   │   ├── (dashboard)/
 │   │   │   ├── layout.tsx       # Dashboard shell (sidebar + header)
 │   │   │   ├── dashboard/page.tsx  # Endpoint list / overview
