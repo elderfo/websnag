@@ -2,18 +2,34 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { GET } from './route'
 
 const mockExchangeCodeForSession = vi.fn()
+const mockGetUser = vi.fn()
 
 vi.mock('@/lib/supabase/server', () => ({
   createClient: vi.fn().mockResolvedValue({
     auth: {
       exchangeCodeForSession: (...args: unknown[]) => mockExchangeCodeForSession(...args),
+      getUser: (...args: unknown[]) => mockGetUser(...args),
     },
+    from: vi.fn().mockReturnValue({
+      select: vi.fn().mockReturnValue({
+        eq: vi.fn().mockReturnValue({
+          maybeSingle: vi.fn().mockResolvedValue({
+            data: { username: 'testuser' },
+            error: null,
+          }),
+        }),
+      }),
+    }),
   }),
 }))
 
 describe('Auth callback route', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    mockGetUser.mockResolvedValue({
+      data: { user: { id: 'user-1' } },
+      error: null,
+    })
   })
 
   it('redirects to /dashboard on successful code exchange', async () => {

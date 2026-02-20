@@ -16,9 +16,18 @@ interface SettingsClientProps {
   createdAt: string
   plan: Plan
   initialUsername: string | null
+  isSetup: boolean
+  redirectAfterSave: string | null
 }
 
-export function SettingsClient({ email, createdAt, plan, initialUsername }: SettingsClientProps) {
+export function SettingsClient({
+  email,
+  createdAt,
+  plan,
+  initialUsername,
+  isSetup,
+  redirectAfterSave,
+}: SettingsClientProps) {
   const router = useRouter()
   const [username, setUsername] = useState(initialUsername ?? '')
   const [savedUsername, setSavedUsername] = useState(initialUsername)
@@ -28,6 +37,14 @@ export function SettingsClient({ email, createdAt, plan, initialUsername }: Sett
   const [usernameSaving, setUsernameSaving] = useState(false)
   const [usernameSuccess, setUsernameSuccess] = useState(false)
   const checkAbortRef = useRef<AbortController | null>(null)
+  const usernameCardRef = useRef<HTMLDivElement | null>(null)
+
+  // When arriving via the setup flow, scroll the username card into view
+  useEffect(() => {
+    if (isSetup && usernameCardRef.current) {
+      usernameCardRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    }
+  }, [isSetup])
 
   async function handleSignOut() {
     const supabase = createClient()
@@ -116,6 +133,13 @@ export function SettingsClient({ email, createdAt, plan, initialUsername }: Sett
 
       setSavedUsername(data.username)
       setUsernameSuccess(true)
+
+      // Redirect after save: go to the requested page, or dashboard if in setup flow
+      if (redirectAfterSave) {
+        router.push(redirectAfterSave)
+      } else if (isSetup) {
+        router.push('/dashboard')
+      }
     } catch (err) {
       console.error('[settings] failed to save username:', err)
       setUsernameError('Failed to save username')
@@ -133,66 +157,84 @@ export function SettingsClient({ email, createdAt, plan, initialUsername }: Sett
 
   return (
     <div className="space-y-6">
+      {/* Setup mode: contextual prompt shown above the username card */}
+      {isSetup && !savedUsername && (
+        <div className="rounded-lg border border-accent/30 bg-accent/5 px-4 py-3">
+          <p className="text-sm font-medium text-text-primary">
+            Choose your username to get started
+          </p>
+          <p className="mt-1 text-sm text-text-secondary">
+            Your username will be a permanent part of all your webhook URLs:{' '}
+            <span className="font-mono text-text-muted">
+              websnag.dev/wh/<span className="text-accent">your-username</span>/slug
+            </span>
+            . It cannot be changed after it is set.
+          </p>
+        </div>
+      )}
+
       {/* Username */}
-      <Card>
-        <h2 className="mb-4 text-base font-medium text-text-primary">Username</h2>
-        <p className="mb-3 text-sm text-text-secondary">
-          Your username is used in webhook URLs:{' '}
-          <span className="font-mono text-text-muted">
-            /wh/<span className="text-accent">{savedUsername ?? 'your-username'}</span>
-            /endpoint-slug
-          </span>
-        </p>
-        {savedUsername ? (
-          <div className="flex items-center gap-3">
-            <span className="font-mono text-sm text-text-primary">{savedUsername}</span>
-            <Badge variant="default">Locked</Badge>
-          </div>
-        ) : (
-          <>
-            <div className="flex items-start gap-3">
-              <div className="flex-1">
-                <Input
-                  value={username}
-                  onChange={(e) => {
-                    setUsername(e.target.value.toLowerCase())
-                    setUsernameSuccess(false)
-                  }}
-                  placeholder="your-username"
-                  error={usernameError}
-                  maxLength={32}
-                />
-                <div className="mt-1.5 flex items-center gap-2">
-                  <p className="text-xs text-text-muted">
-                    3-32 characters, lowercase letters, numbers, and hyphens. Cannot be changed once
-                    set.
-                  </p>
-                </div>
-                {usernameChecking && username.length >= 3 && (
-                  <p className="mt-1 text-xs text-text-muted">Checking availability...</p>
-                )}
-                {usernameAvailable === true && !usernameChecking && (
-                  <p className="mt-1 text-xs text-green-400">Username is available</p>
-                )}
-              </div>
-              <Button
-                size="sm"
-                onClick={handleSaveUsername}
-                disabled={
-                  username.length < 3 ||
-                  !USERNAME_REGEX.test(username) ||
-                  usernameSaving ||
-                  usernameChecking ||
-                  usernameAvailable === false
-                }
-              >
-                {usernameSaving ? 'Saving...' : 'Set Username'}
-              </Button>
+      <div ref={usernameCardRef}>
+        <Card>
+          <h2 className="mb-4 text-base font-medium text-text-primary">Username</h2>
+          <p className="mb-3 text-sm text-text-secondary">
+            Your username is used in webhook URLs:{' '}
+            <span className="font-mono text-text-muted">
+              /wh/<span className="text-accent">{savedUsername ?? 'your-username'}</span>
+              /endpoint-slug
+            </span>
+          </p>
+          {savedUsername ? (
+            <div className="flex items-center gap-3">
+              <span className="font-mono text-sm text-text-primary">{savedUsername}</span>
+              <Badge variant="default">Locked</Badge>
             </div>
-            {usernameSuccess && <p className="mt-2 text-xs text-green-400">Username saved.</p>}
-          </>
-        )}
-      </Card>
+          ) : (
+            <>
+              <div className="flex items-start gap-3">
+                <div className="flex-1">
+                  <Input
+                    value={username}
+                    onChange={(e) => {
+                      setUsername(e.target.value.toLowerCase())
+                      setUsernameSuccess(false)
+                    }}
+                    placeholder="your-username"
+                    error={usernameError}
+                    maxLength={32}
+                  />
+                  <div className="mt-1.5 flex items-center gap-2">
+                    <p className="text-xs text-text-muted">
+                      3-32 characters, lowercase letters, numbers, and hyphens. Cannot be changed
+                      once set.
+                    </p>
+                  </div>
+                  {usernameChecking && username.length >= 3 && (
+                    <p className="mt-1 text-xs text-text-muted">Checking availability...</p>
+                  )}
+                  {usernameAvailable === true && !usernameChecking && (
+                    <p className="mt-1 text-xs text-green-400">Username is available</p>
+                  )}
+                </div>
+                <Button
+                  size="sm"
+                  onClick={handleSaveUsername}
+                  disabled={
+                    username.length < 3 ||
+                    !USERNAME_REGEX.test(username) ||
+                    usernameSaving ||
+                    usernameChecking ||
+                    usernameAvailable === false
+                  }
+                >
+                  {usernameSaving ? 'Saving...' : 'Set Username'}
+                </Button>
+              </div>
+              {usernameSuccess && <p className="mt-2 text-xs text-green-400">Username saved.</p>}
+            </>
+          )}
+        </Card>
+      </div>
 
       {/* Account info */}
       <Card>

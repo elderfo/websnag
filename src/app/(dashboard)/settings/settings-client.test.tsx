@@ -21,6 +21,8 @@ const defaultProps = {
   createdAt: '2026-01-15T00:00:00Z',
   plan: 'free' as const,
   initialUsername: null,
+  isSetup: false,
+  redirectAfterSave: null,
 }
 
 /** Mock fetch that routes availability checks and saves separately */
