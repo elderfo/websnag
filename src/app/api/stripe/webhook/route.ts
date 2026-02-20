@@ -78,9 +78,6 @@ export async function POST(req: Request) {
         ? new Date(firstItem.current_period_end * 1000).toISOString()
         : null
 
-      // TODO: persist cancel_at_period_end to the subscriptions table so the billing UI can
-      // distinguish "renewing" from "canceling at period end". Requires a migration to add a
-      // cancel_at_period_end BOOLEAN column to subscriptions before this value can be stored.
       // If canceled at period end, keep as 'pro' until period ends
       let subUpdateError: unknown = null
       if (subscription.cancel_at_period_end) {
@@ -89,6 +86,7 @@ export async function POST(req: Request) {
           .update({
             status: 'active',
             current_period_end: periodEnd,
+            cancel_at_period_end: true,
           })
           .eq('stripe_customer_id', customerId)
         subUpdateError = error
@@ -99,6 +97,7 @@ export async function POST(req: Request) {
             plan: 'pro',
             status: 'active',
             current_period_end: periodEnd,
+            cancel_at_period_end: false,
           })
           .eq('stripe_customer_id', customerId)
         subUpdateError = error
@@ -109,6 +108,7 @@ export async function POST(req: Request) {
             plan: 'free',
             status: subscription.status === 'past_due' ? 'past_due' : 'canceled',
             current_period_end: periodEnd,
+            cancel_at_period_end: false,
           })
           .eq('stripe_customer_id', customerId)
         subUpdateError = error
@@ -144,6 +144,7 @@ export async function POST(req: Request) {
         .update({
           plan: 'free',
           status: 'canceled',
+          cancel_at_period_end: false,
         })
         .eq('stripe_customer_id', customerId)
 

@@ -187,6 +187,7 @@ describe('POST /api/stripe/webhook', () => {
       plan: 'free',
       status: 'canceled',
       current_period_end: new Date(1700000000 * 1000).toISOString(),
+      cancel_at_period_end: false,
     })
   })
 
