@@ -124,7 +124,7 @@ export function BillingClient({
       )}
 
       {/* Cancellation pending warning */}
-      {cancelAtPeriodEnd && status === 'active' && currentPeriodEnd && (
+      {cancelAtPeriodEnd && isPro && status === 'active' && currentPeriodEnd && (
         <div className="flex items-start justify-between rounded-lg border border-amber-500/30 bg-amber-500/10 px-4 py-3">
           <div className="flex items-start gap-3">
             <svg

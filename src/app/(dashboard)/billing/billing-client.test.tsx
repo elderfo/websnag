@@ -231,6 +231,25 @@ describe('BillingClient', () => {
     expect(screen.getByText(/Ends on/)).toBeInTheDocument()
   })
 
+  it('does not show cancellation banner for free plan even with cancelAtPeriodEnd=true', () => {
+    render(
+      <BillingClient
+        plan="free"
+        status="active"
+        hasStripeCustomer={false}
+        requestCount={0}
+        aiAnalysisCount={0}
+        maxRequests={100}
+        maxAnalyses={5}
+        currentPeriodEnd="2026-03-15T00:00:00Z"
+        cancelAtPeriodEnd={true}
+      />
+    )
+
+    expect(screen.queryByText(/Your Pro plan ends on/)).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /Re-subscribe/ })).not.toBeInTheDocument()
+  })
+
   it('does not show cancellation banner when cancelAtPeriodEnd is false', () => {
     render(
       <BillingClient
