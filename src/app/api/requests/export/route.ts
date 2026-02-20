@@ -33,12 +33,15 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: 'Endpoint not found' }, { status: 404 })
   }
 
-  // Build filtered query
+  // Build filtered query — limit prevents unbounded result sets
   let query = supabase
     .from('requests')
-    .select('id, method, headers, body, query_params, content_type, source_ip, size_bytes, received_at, ai_analysis')
+    .select(
+      'id, method, headers, body, query_params, content_type, source_ip, size_bytes, received_at, ai_analysis'
+    )
     .eq('endpoint_id', endpointId)
     .order('received_at', { ascending: false })
+    .limit(10000)
 
   const method = searchParams.get('method')
   if (method) {

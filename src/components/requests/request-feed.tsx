@@ -124,7 +124,13 @@ export function RequestFeed({ endpointId, endpointUrl }: RequestFeedProps) {
     return <LoadingSkeleton />
   }
 
-  if (requests.length === 0 && !filters.method && !filters.search && !filters.dateFrom && !filters.dateTo) {
+  if (
+    requests.length === 0 &&
+    !filters.method &&
+    !filters.search &&
+    !filters.dateFrom &&
+    !filters.dateTo
+  ) {
     return <EmptyState endpointUrl={endpointUrl} />
   }
 
@@ -175,12 +181,7 @@ export function RequestFeed({ endpointId, endpointUrl }: RequestFeedProps) {
               ))}
               {hasMore && (
                 <div className="p-3 text-center border-t border-border">
-                  <Button
-                    variant="secondary"
-                    size="sm"
-                    onClick={loadMore}
-                    disabled={loadingMore}
-                  >
+                  <Button variant="secondary" size="sm" onClick={loadMore} disabled={loadingMore}>
                     {loadingMore ? 'Loading...' : 'Load more'}
                   </Button>
                 </div>
@@ -209,7 +210,8 @@ export function RequestFeed({ endpointId, endpointUrl }: RequestFeedProps) {
         open={!!deleteConfirm}
         title="Delete request"
         message="Are you sure you want to delete this request? This action cannot be undone."
-        confirmLabel={deleting ? 'Deleting...' : 'Delete'}
+        confirmLabel="Delete"
+        loading={deleting}
         onConfirm={handleSingleDelete}
         onCancel={() => setDeleteConfirm(null)}
       />

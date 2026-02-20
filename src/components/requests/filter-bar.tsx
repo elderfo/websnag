@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import type { RequestFilters } from '@/types'
 
 interface FilterBarProps {
@@ -12,16 +12,24 @@ const HTTP_METHODS = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE']
 
 export function FilterBar({ filters, onFiltersChange }: FilterBarProps) {
   const [searchInput, setSearchInput] = useState(filters.search ?? '')
+  // Store latest callback ref to avoid re-triggering the debounce effect when
+  // the parent re-renders and passes a new function reference.
+  const onFiltersChangeRef = useRef(onFiltersChange)
+  useEffect(() => {
+    onFiltersChangeRef.current = onFiltersChange
+  })
 
-  // Debounce search input
+  // Debounce search input — depends only on searchInput and the stable filters
+  // values so that a new onFiltersChange reference does not cause an infinite loop.
   useEffect(() => {
     const timer = setTimeout(() => {
       if (searchInput !== (filters.search ?? '')) {
-        onFiltersChange({ ...filters, search: searchInput || undefined })
+        onFiltersChangeRef.current({ ...filters, search: searchInput || undefined })
       }
     }, 300)
     return () => clearTimeout(timer)
-  }, [searchInput, filters, onFiltersChange])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchInput, filters.method, filters.dateFrom, filters.dateTo, filters.search])
 
   const hasActiveFilters = filters.method || filters.search || filters.dateFrom || filters.dateTo
 
@@ -30,9 +38,7 @@ export function FilterBar({ filters, onFiltersChange }: FilterBarProps) {
       {/* Method filter */}
       <select
         value={filters.method ?? ''}
-        onChange={(e) =>
-          onFiltersChange({ ...filters, method: e.target.value || undefined })
-        }
+        onChange={(e) => onFiltersChange({ ...filters, method: e.target.value || undefined })}
         className="rounded-md border border-border bg-background px-3 py-1.5 text-sm text-text-primary"
         aria-label="Filter by method"
       >

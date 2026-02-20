@@ -10,7 +10,10 @@ function matchesFilters(request: WebhookRequest, filters: RequestFilters): boole
   if (filters.method && request.method !== filters.method) return false
   if (filters.dateFrom && request.received_at < filters.dateFrom) return false
   if (filters.dateTo && request.received_at > filters.dateTo) return false
-  if (filters.search && !(request.body ?? '').toLowerCase().includes(filters.search.toLowerCase())) {
+  if (
+    filters.search &&
+    !(request.body ?? '').toLowerCase().includes(filters.search.toLowerCase())
+  ) {
     return false
   }
   return true
@@ -19,6 +22,7 @@ function matchesFilters(request: WebhookRequest, filters: RequestFilters): boole
 export function useRealtimeRequests(endpointId: string, filters: RequestFilters = {}) {
   const [requests, setRequests] = useState<WebhookRequest[]>([])
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
   const [hasMore, setHasMore] = useState(false)
   const [loadingMore, setLoadingMore] = useState(false)
 
@@ -67,12 +71,20 @@ export function useRealtimeRequests(endpointId: string, filters: RequestFilters 
   useEffect(() => {
     let cancelled = false
 
-    fetchRequests().then(({ requests: data, hasMore: more }) => {
-      if (cancelled) return
-      setLoading(false)
-      setRequests(data)
-      setHasMore(more)
-    })
+    fetchRequests()
+      .then(({ requests: data, hasMore: more }) => {
+        if (cancelled) return
+        setError(null)
+        setRequests(data)
+        setHasMore(more)
+      })
+      .catch(() => {
+        if (cancelled) return
+        setError('Failed to load requests. Please try again.')
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false)
+      })
 
     return () => {
       cancelled = true
@@ -131,5 +143,5 @@ export function useRealtimeRequests(endpointId: string, filters: RequestFilters 
     setRequests((prev) => prev.filter((r) => !idSet.has(r.id)))
   }, [])
 
-  return { requests, loading, hasMore, loadingMore, loadMore, removeRequest, removeRequests }
+  return { requests, loading, error, hasMore, loadingMore, loadMore, removeRequest, removeRequests }
 }
