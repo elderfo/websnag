@@ -27,6 +27,8 @@ const defaultProps = {
 function mockFetchForUsername(opts?: {
   checkAvailable?: boolean
   checkReason?: string
+  checkServerError?: boolean
+  checkNetworkError?: boolean
   saveOk?: boolean
   saveBody?: Record<string, unknown>
   saveError?: boolean
@@ -34,6 +36,8 @@ function mockFetchForUsername(opts?: {
   const {
     checkAvailable = true,
     checkReason,
+    checkServerError = false,
+    checkNetworkError = false,
     saveOk = true,
     saveBody = { username: 'testuser' },
     saveError = false,
@@ -41,6 +45,16 @@ function mockFetchForUsername(opts?: {
 
   return vi.fn().mockImplementation((url: string) => {
     if (typeof url === 'string' && url.includes('/api/username/check')) {
+      if (checkNetworkError) {
+        return Promise.reject(new Error('Network error'))
+      }
+      if (checkServerError) {
+        return Promise.resolve({
+          ok: false,
+          status: 500,
+          json: async () => ({ error: 'Internal server error' }),
+        } as Response)
+      }
       return Promise.resolve({
         ok: true,
         json: async () =>
@@ -49,7 +63,7 @@ function mockFetchForUsername(opts?: {
             : { available: false, reason: checkReason ?? 'Username is already taken' },
       } as Response)
     }
-    // POST /api/username
+    // All other requests (save endpoint)
     if (saveError) {
       return Promise.reject(new Error('Network error'))
     }
@@ -264,6 +278,44 @@ describe('SettingsClient', () => {
     it('shows placeholder in URL preview when no username', () => {
       render(<SettingsClient {...defaultProps} />)
       expect(screen.getByText('your-username', { selector: '.text-accent' })).toBeInTheDocument()
+    })
+
+    it('disables button for regex-invalid username (leading hyphen)', async () => {
+      vi.useRealTimers()
+      const user = userEvent.setup()
+      render(<SettingsClient {...defaultProps} />)
+      await user.type(screen.getByPlaceholderText('your-username'), '-abc')
+      expect(screen.getByRole('button', { name: 'Set Username' })).toBeDisabled()
+    })
+
+    it('shows error message when check endpoint returns server error', async () => {
+      vi.useRealTimers()
+      global.fetch = mockFetchForUsername({ checkServerError: true })
+      const user = userEvent.setup()
+      render(<SettingsClient {...defaultProps} />)
+
+      await user.type(screen.getByPlaceholderText('your-username'), 'testuser')
+
+      await waitFor(() => {
+        expect(
+          screen.getByText('Could not verify availability. You can still try saving.')
+        ).toBeInTheDocument()
+      })
+    })
+
+    it('shows error message when check endpoint has network failure', async () => {
+      vi.useRealTimers()
+      global.fetch = mockFetchForUsername({ checkNetworkError: true })
+      const user = userEvent.setup()
+      render(<SettingsClient {...defaultProps} />)
+
+      await user.type(screen.getByPlaceholderText('your-username'), 'testuser')
+
+      await waitFor(() => {
+        expect(
+          screen.getByText('Could not verify availability. You can still try saving.')
+        ).toBeInTheDocument()
+      })
     })
   })
 })

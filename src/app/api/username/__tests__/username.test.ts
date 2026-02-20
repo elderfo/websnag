@@ -483,4 +483,54 @@ describe('POST /api/username', () => {
     const body = await response.json()
     expect(body.error).toBe('Internal server error')
   })
+
+  it('returns 500 when immutability check query fails (not PGRST116)', async () => {
+    mockGetUser.mockResolvedValue({ data: { user: { id: 'user-1' } } })
+
+    // Immutability check returns a real DB error
+    mockAdminFrom.mockReturnValue(
+      createChain({ data: null, error: { code: 'PGRST500', message: 'connection refused' } })
+    )
+
+    const { POST } = await import('../route')
+    const request = new Request('http://localhost/api/username', {
+      method: 'POST',
+      body: JSON.stringify({ username: 'johndoe' }),
+      headers: { 'Content-Type': 'application/json' },
+    })
+    const response = await POST(request)
+
+    expect(response.status).toBe(500)
+    const body = await response.json()
+    expect(body.error).toBe('Failed to verify username status')
+    // Must not proceed to upsert when immutability check fails
+    expect(body.error).not.toContain('connection refused')
+  })
+
+  it('returns 500 when uniqueness check query fails (not PGRST116)', async () => {
+    mockGetUser.mockResolvedValue({ data: { user: { id: 'user-1' } } })
+
+    let adminCallCount = 0
+    mockAdminFrom.mockImplementation(() => {
+      adminCallCount++
+      if (adminCallCount === 1) {
+        // immutability check: no existing username
+        return createChain({ data: null, error: { code: 'PGRST116' } })
+      }
+      // uniqueness check: DB error
+      return createChain({ data: null, error: { code: 'PGRST500', message: 'timeout' } })
+    })
+
+    const { POST } = await import('../route')
+    const request = new Request('http://localhost/api/username', {
+      method: 'POST',
+      body: JSON.stringify({ username: 'johndoe' }),
+      headers: { 'Content-Type': 'application/json' },
+    })
+    const response = await POST(request)
+
+    expect(response.status).toBe(500)
+    const body = await response.json()
+    expect(body.error).toBe('Failed to verify username availability')
+  })
 })

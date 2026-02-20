@@ -134,4 +134,33 @@ describe('GET /api/username/check', () => {
     expect(blockedBody.available).toBe(takenBody.available)
     expect(blockedBody.reason).toBe(takenBody.reason)
   })
+
+  it('returns 500 when database query fails (not PGRST116)', async () => {
+    mockGetUser.mockResolvedValue({ data: { user: { id: 'user-1' } } })
+    mockAdminFrom.mockReturnValue(
+      createChain({ data: null, error: { code: 'PGRST500', message: 'connection refused' } })
+    )
+
+    const { GET } = await import('../route')
+    const response = await GET(makeRequest('testuser'))
+
+    expect(response.status).toBe(500)
+    const body = await response.json()
+    expect(body.error).toBe('Unable to check availability')
+    // Must not leak raw DB error
+    expect(body.error).not.toContain('connection refused')
+  })
+
+  it('does not return available:true when database errors', async () => {
+    mockGetUser.mockResolvedValue({ data: { user: { id: 'user-1' } } })
+    mockAdminFrom.mockReturnValue(
+      createChain({ data: null, error: { code: 'PGRST500', message: 'timeout' } })
+    )
+
+    const { GET } = await import('../route')
+    const response = await GET(makeRequest('testuser'))
+
+    const body = await response.json()
+    expect(body.available).toBeUndefined()
+  })
 })

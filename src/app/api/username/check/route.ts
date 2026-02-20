@@ -32,11 +32,16 @@ export async function GET(req: NextRequest) {
     }
 
     const admin = createAdminClient()
-    const { data: existing } = await admin
+    const { data: existing, error: lookupError } = await admin
       .from('profiles')
       .select('id')
       .eq('username', username)
       .single()
+
+    if (lookupError && lookupError.code !== 'PGRST116') {
+      console.error('[username/check] database lookup error:', lookupError)
+      return NextResponse.json({ error: 'Unable to check availability' }, { status: 500 })
+    }
 
     if (existing) {
       return NextResponse.json({ available: false, reason: 'Username is already taken' })

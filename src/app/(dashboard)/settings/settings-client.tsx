@@ -57,6 +57,15 @@ export function SettingsClient({ email, createdAt, plan, initialUsername }: Sett
         const res = await fetch(`/api/username/check?username=${encodeURIComponent(username)}`, {
           signal: controller.signal,
         })
+
+        if (controller.signal.aborted) return
+
+        if (!res.ok) {
+          setUsernameAvailable(null)
+          setUsernameError('Could not verify availability. You can still try saving.')
+          return
+        }
+
         const data = await res.json()
 
         if (controller.signal.aborted) return
@@ -70,7 +79,8 @@ export function SettingsClient({ email, createdAt, plan, initialUsername }: Sett
         }
       } catch (err) {
         if (err instanceof DOMException && err.name === 'AbortError') return
-        // Silently fail availability check — save will still validate server-side
+        setUsernameAvailable(null)
+        setUsernameError('Could not verify availability. You can still try saving.')
       } finally {
         if (!controller.signal.aborted) {
           setUsernameChecking(false)
@@ -80,6 +90,7 @@ export function SettingsClient({ email, createdAt, plan, initialUsername }: Sett
 
     return () => {
       clearTimeout(timer)
+      checkAbortRef.current?.abort()
       setUsernameChecking(false)
     }
   }, [username])
@@ -105,7 +116,8 @@ export function SettingsClient({ email, createdAt, plan, initialUsername }: Sett
 
       setSavedUsername(data.username)
       setUsernameSuccess(true)
-    } catch {
+    } catch (err) {
+      console.error('[settings] failed to save username:', err)
       setUsernameError('Failed to save username')
     } finally {
       setUsernameSaving(false)
@@ -168,6 +180,7 @@ export function SettingsClient({ email, createdAt, plan, initialUsername }: Sett
                 onClick={handleSaveUsername}
                 disabled={
                   username.length < 3 ||
+                  !USERNAME_REGEX.test(username) ||
                   usernameSaving ||
                   usernameChecking ||
                   usernameAvailable === false

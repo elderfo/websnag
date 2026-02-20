@@ -67,26 +67,37 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Username already taken' }, { status: 409 })
     }
 
-    // Check if user already has a username — usernames are immutable once set
+    // Check if user already has a username — usernames are immutable once set.
+    // Fail closed: if the query errors, do NOT proceed to upsert.
     const admin = createAdminClient()
-    const { data: existingProfile } = await admin
+    const { data: existingProfile, error: profileError } = await admin
       .from('profiles')
       .select('username')
       .eq('id', user.id)
       .single()
+
+    if (profileError && profileError.code !== 'PGRST116') {
+      console.error('[username] POST profile lookup error:', profileError)
+      return NextResponse.json({ error: 'Failed to verify username status' }, { status: 500 })
+    }
 
     if (existingProfile?.username) {
       return NextResponse.json({ error: 'Username cannot be changed once set' }, { status: 403 })
     }
 
     // Check uniqueness via admin client (bypasses RLS to see all profiles)
-    const { data: existing } = await admin
+    const { data: existing, error: uniquenessError } = await admin
       .from('profiles')
       .select('id')
       .eq('username', username)
       .single()
 
-    if (existing && existing.id !== user.id) {
+    if (uniquenessError && uniquenessError.code !== 'PGRST116') {
+      console.error('[username] POST uniqueness check error:', uniquenessError)
+      return NextResponse.json({ error: 'Failed to verify username availability' }, { status: 500 })
+    }
+
+    if (existing) {
       return NextResponse.json({ error: 'Username already taken' }, { status: 409 })
     }
 
