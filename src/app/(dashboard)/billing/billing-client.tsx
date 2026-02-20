@@ -62,7 +62,9 @@ export function BillingClient({
       const data = await res.json()
       if (data.url) {
         window.location.href = data.url
+        return
       }
+      setLoading(false)
     } catch {
       setLoading(false)
     }
@@ -75,7 +77,9 @@ export function BillingClient({
       const data = await res.json()
       if (data.url) {
         window.location.href = data.url
+        return
       }
+      setLoading(false)
     } catch {
       setLoading(false)
     }
