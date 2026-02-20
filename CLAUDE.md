@@ -47,9 +47,10 @@ websnag/
 │   ├── app/
 │   │   ├── layout.tsx           # Root layout with providers
 │   │   ├── page.tsx             # Landing/marketing page
-│   │   ├── (auth)/
+│   │   ├── auth/
 │   │   │   ├── login/page.tsx
-│   │   │   └── callback/route.ts  # OAuth callback handler
+│   │   │   ├── callback/route.ts  # OAuth callback handler
+│   │   │   └── redirect/page.tsx  # Client-side post-auth redirect (handles upgrade intent)
 │   │   ├── (dashboard)/
 │   │   │   ├── layout.tsx       # Dashboard shell (sidebar + header)
 │   │   │   ├── dashboard/page.tsx  # Endpoint list / overview

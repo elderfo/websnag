@@ -28,6 +28,7 @@ function getInput(label: RegExp) {
 describe('LoginForm', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    localStorage.clear()
     mockSignInWithOAuth.mockResolvedValue({ error: null })
     mockSignInWithOtp.mockResolvedValue({ error: null })
   })
@@ -138,5 +139,38 @@ describe('LoginForm', () => {
     fireEvent.click(backLinks[0])
 
     expect(getButton(/send magic link/i)).toBeInTheDocument()
+  })
+
+  it('stores upgrade intent in localStorage when intent=upgrade is in URL', () => {
+    // Mock window.location.search
+    Object.defineProperty(window, 'location', {
+      value: {
+        ...window.location,
+        search: '?intent=upgrade',
+        origin: 'http://localhost:3000',
+      },
+      writable: true,
+    })
+
+    render(<LoginForm />)
+
+    expect(localStorage.getItem('upgrade_intent')).toBe('true')
+  })
+
+  it('clears stale upgrade intent from localStorage when no intent param is present', () => {
+    localStorage.setItem('upgrade_intent', 'true')
+
+    Object.defineProperty(window, 'location', {
+      value: {
+        ...window.location,
+        search: '',
+        origin: 'http://localhost:3000',
+      },
+      writable: true,
+    })
+
+    render(<LoginForm />)
+
+    expect(localStorage.getItem('upgrade_intent')).toBeNull()
   })
 })

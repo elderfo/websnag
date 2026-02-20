@@ -34,7 +34,7 @@ describe('Auth callback route', () => {
     })
   })
 
-  it('redirects to /dashboard on successful code exchange', async () => {
+  it('redirects to /auth/redirect instead of /dashboard after successful login', async () => {
     mockExchangeCodeForSession.mockResolvedValue({ error: null })
 
     const request = new Request('http://localhost:3000/auth/callback?code=test-code')
@@ -42,7 +42,7 @@ describe('Auth callback route', () => {
 
     expect(mockExchangeCodeForSession).toHaveBeenCalledWith('test-code')
     expect(response.status).toBe(307)
-    expect(response.headers.get('location')).toBe('http://localhost:3000/dashboard')
+    expect(response.headers.get('location')).toBe('http://localhost:3000/auth/redirect')
   })
 
   it('redirects to custom next path when provided', async () => {
@@ -77,7 +77,7 @@ describe('Auth callback route', () => {
     expect(response.headers.get('location')).toBe('http://localhost:3000/login?error=auth')
   })
 
-  it('redirects to settings for username setup when user has no username on /dashboard', async () => {
+  it('redirects to settings with /auth/redirect as redirect param when user has no username on default flow', async () => {
     mockExchangeCodeForSession.mockResolvedValue({ error: null })
     mockMaybeSingle.mockResolvedValue({ data: null, error: null })
 
@@ -85,7 +85,9 @@ describe('Auth callback route', () => {
     const response = await GET(request)
 
     expect(response.status).toBe(307)
-    expect(response.headers.get('location')).toBe('http://localhost:3000/settings?setup=username')
+    expect(response.headers.get('location')).toBe(
+      'http://localhost:3000/settings?setup=username&redirect=%2Fauth%2Fredirect'
+    )
   })
 
   it('redirects to settings with redirect param when user has no username on deep link', async () => {

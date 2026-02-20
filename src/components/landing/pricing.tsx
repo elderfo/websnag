@@ -48,7 +48,7 @@ const plans: PricingPlan[] = [
       { text: 'Custom endpoint slugs', included: true },
     ],
     cta: 'Upgrade to Pro',
-    ctaHref: '/login',
+    ctaHref: '/login?intent=upgrade',
     highlighted: true,
   },
 ]
