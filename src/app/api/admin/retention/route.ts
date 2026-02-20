@@ -7,6 +7,15 @@ interface RetentionResult {
   pro_deleted: number
 }
 
+function isAdmin(userId: string): boolean {
+  const adminIds = process.env.ADMIN_USER_IDS
+  if (!adminIds) return false
+  return adminIds
+    .split(',')
+    .map((id) => id.trim())
+    .includes(userId)
+}
+
 export async function POST(): Promise<NextResponse> {
   try {
     const supabase = await createClient()
@@ -16,6 +25,10 @@ export async function POST(): Promise<NextResponse> {
 
     if (!user) {
       return NextResponse.json({ error: 'Authentication required' }, { status: 401 })
+    }
+
+    if (!isAdmin(user.id)) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
 
     const admin = createAdminClient()

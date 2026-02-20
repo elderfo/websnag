@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 
 const mockGetUser = vi.fn()
 const mockRpc = vi.fn()
@@ -18,8 +18,16 @@ vi.mock('@/lib/supabase/admin', () => ({
 }))
 
 describe('POST /api/admin/retention', () => {
+  const originalEnv = process.env
+
   beforeEach(() => {
     vi.clearAllMocks()
+    vi.resetModules()
+    process.env = { ...originalEnv }
+  })
+
+  afterEach(() => {
+    process.env = originalEnv
   })
 
   it('returns 401 when not authenticated', async () => {
@@ -33,7 +41,36 @@ describe('POST /api/admin/retention', () => {
     expect(body.error).toBe('Authentication required')
   })
 
+  it('returns 403 when ADMIN_USER_IDS is not set', async () => {
+    delete process.env.ADMIN_USER_IDS
+    mockGetUser.mockResolvedValue({
+      data: { user: { id: 'user-1' } },
+    })
+
+    const { POST } = await import('../route')
+    const response = await POST()
+
+    expect(response.status).toBe(403)
+    const body = await response.json()
+    expect(body.error).toBe('Forbidden')
+  })
+
+  it('returns 403 when user is not admin', async () => {
+    process.env.ADMIN_USER_IDS = 'admin-1, admin-2'
+    mockGetUser.mockResolvedValue({
+      data: { user: { id: 'user-1' } },
+    })
+
+    const { POST } = await import('../route')
+    const response = await POST()
+
+    expect(response.status).toBe(403)
+    const body = await response.json()
+    expect(body.error).toBe('Forbidden')
+  })
+
   it('returns cleanup results on success', async () => {
+    process.env.ADMIN_USER_IDS = 'user-1'
     mockGetUser.mockResolvedValue({
       data: { user: { id: 'user-1' } },
     })
@@ -54,6 +91,7 @@ describe('POST /api/admin/retention', () => {
   })
 
   it('returns 500 when RPC fails', async () => {
+    process.env.ADMIN_USER_IDS = 'user-1'
     mockGetUser.mockResolvedValue({
       data: { user: { id: 'user-1' } },
     })
