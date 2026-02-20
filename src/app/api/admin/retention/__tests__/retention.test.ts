@@ -110,16 +110,12 @@ describe('POST /api/admin/retention', () => {
       error: { message: 'function execution failed' },
     })
 
-    const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
-
     const { POST } = await import('../route')
     const response = await POST()
 
     expect(response.status).toBe(500)
     const body = await response.json()
     expect(body.error).toBe('Retention cleanup failed')
-
-    consoleSpy.mockRestore()
   })
 
   it('returns 500 when RPC returns null data without error', async () => {
@@ -129,15 +125,11 @@ describe('POST /api/admin/retention', () => {
     })
     mockRpc.mockResolvedValue({ data: null, error: null })
 
-    const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
-
     const { POST } = await import('../route')
     const response = await POST()
 
     expect(response.status).toBe(500)
     const body = await response.json()
     expect(body.error).toBe('Retention cleanup returned no result')
-
-    consoleSpy.mockRestore()
   })
 })

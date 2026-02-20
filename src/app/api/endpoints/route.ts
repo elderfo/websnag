@@ -173,6 +173,8 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Failed to create endpoint' }, { status: 500 })
     }
 
+    log.info({ endpointId: endpoint?.id, slug, userId: user.id }, 'endpoint created')
+
     return NextResponse.json(endpoint, { status: 201 })
   } catch (err) {
     log.error({ err }, 'POST unhandled error')

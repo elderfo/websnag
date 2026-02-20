@@ -23,6 +23,16 @@ vi.mock('@/lib/stripe', () => ({
   },
 }))
 
+vi.mock('@/lib/logger', () => ({
+  createRequestLogger: () => ({
+    info: vi.fn(),
+    error: vi.fn(),
+    warn: vi.fn(),
+    debug: vi.fn(),
+    requestId: 'test-request-id',
+  }),
+}))
+
 import { POST } from '../webhook/route'
 
 function makeRequest(body: string, signature: string | null = 'sig_test'): Request {
@@ -38,8 +48,9 @@ function makeRequest(body: string, signature: string | null = 'sig_test'): Reque
 }
 
 function mockUpdateChain() {
+  const eqMock = vi.fn().mockResolvedValue({ error: null })
   const updateMock = vi.fn().mockReturnValue({
-    eq: vi.fn().mockResolvedValue({ error: null }),
+    eq: eqMock,
   })
   mockAdminFrom.mockReturnValue({ update: updateMock })
   return updateMock

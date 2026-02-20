@@ -282,6 +282,8 @@ async function handleWebhookCapture(
 
   if (insertError) {
     log.error({ err: insertError, endpointId: endpoint.id }, 'request insert failed')
+  } else {
+    log.info({ endpointId: endpoint.id, method: req.method, sizeBytes }, 'webhook captured')
   }
 
   // 7. Increment usage counter

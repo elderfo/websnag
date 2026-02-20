@@ -84,6 +84,8 @@ export async function POST(req: Request) {
     // Increment usage
     await admin.rpc('increment_ai_analysis_count', { p_user_id: user.id })
 
+    log.info({ requestId, userId: user.id, source: analysis.source }, 'AI analysis completed')
+
     return NextResponse.json(analysis)
   } catch (error) {
     log.error({ err: error }, 'analysis failed')

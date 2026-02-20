@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from 'vitest'
 
-vi.mock('@/lib/supabase/admin', () => ({
-  createAdminClient: vi.fn().mockImplementation(() => ({
+vi.mock('@supabase/supabase-js', () => ({
+  createClient: vi.fn().mockImplementation(() => ({
     from: () => ({
       select: () => ({
         limit: () => Promise.resolve({ data: [{}], error: null }),
@@ -28,8 +28,8 @@ describe('GET /api/health (database unreachable)', () => {
   it('returns 503 with status degraded when database query fails', async () => {
     vi.resetModules()
 
-    vi.doMock('@/lib/supabase/admin', () => ({
-      createAdminClient: vi.fn().mockImplementation(() => ({
+    vi.doMock('@supabase/supabase-js', () => ({
+      createClient: vi.fn().mockImplementation(() => ({
         from: () => ({
           select: () => ({
             limit: () => Promise.resolve({ data: null, error: { message: 'connection refused' } }),

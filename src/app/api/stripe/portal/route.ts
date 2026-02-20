@@ -4,6 +4,7 @@ import { createRequestLogger } from '@/lib/logger'
 import { NextResponse } from 'next/server'
 
 export async function POST() {
+  const log = createRequestLogger('stripe-portal')
   try {
     const supabase = await createClient()
     const {
@@ -33,7 +34,6 @@ export async function POST() {
 
     return NextResponse.json({ url: session.url })
   } catch (error) {
-    const log = createRequestLogger('stripe-portal')
     log.error({ err: error }, 'portal session creation failed')
     return NextResponse.json({ error: 'Failed to create portal session' }, { status: 500 })
   }

@@ -10,6 +10,11 @@ const rootLogger = pino({
   timestamp: pino.stdTimeFunctions.isoTime,
 })
 
+/**
+ * Creates a module-scoped logger for non-request contexts (e.g., module-level
+ * initialization, background jobs). For request-scoped logging with automatic
+ * request IDs, use {@link createRequestLogger} instead.
+ */
 export function createLogger(module: string): pino.Logger {
   return rootLogger.child({ module })
 }

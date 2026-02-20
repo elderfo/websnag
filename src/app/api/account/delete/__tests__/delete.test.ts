@@ -177,22 +177,16 @@ describe('POST /api/account/delete', () => {
       error: { message: 'admin delete failed' },
     })
 
-    const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
-
     const { POST } = await import('../route')
     const response = await POST()
 
     expect(response.status).toBe(500)
     const body = await response.json()
     expect(body.error).toBe('Failed to delete account')
-
-    consoleSpy.mockRestore()
   })
 
   it('returns 500 on unhandled error', async () => {
     mockGetUser.mockRejectedValue(new Error('auth service down'))
-
-    const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
 
     const { POST } = await import('../route')
     const response = await POST()
@@ -200,8 +194,6 @@ describe('POST /api/account/delete', () => {
     expect(response.status).toBe(500)
     const body = await response.json()
     expect(body.error).toBe('Internal server error')
-
-    consoleSpy.mockRestore()
   })
 
   it('logs subscription lookup errors but proceeds with deletion', async () => {

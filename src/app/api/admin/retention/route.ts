@@ -45,7 +45,7 @@ export async function POST(): Promise<NextResponse> {
     const result = resultArray?.[0]
 
     if (!result) {
-      log.error('cleanup RPC returned no result')
+      log.error({ rpcResult: data }, 'cleanup RPC returned no result')
       return NextResponse.json({ error: 'Retention cleanup returned no result' }, { status: 500 })
     }
 

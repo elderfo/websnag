@@ -5,6 +5,7 @@ import { createRequestLogger } from '@/lib/logger'
 import { NextResponse } from 'next/server'
 
 export async function POST() {
+  const log = createRequestLogger('stripe-checkout')
   try {
     const supabase = await createClient()
     const {
@@ -64,7 +65,6 @@ export async function POST() {
 
     return NextResponse.json({ url: session.url })
   } catch (error) {
-    const log = createRequestLogger('stripe-checkout')
     log.error({ err: error }, 'checkout session creation failed')
     return NextResponse.json({ error: 'Failed to create checkout session' }, { status: 500 })
   }
