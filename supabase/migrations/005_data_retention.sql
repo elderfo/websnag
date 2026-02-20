@@ -43,7 +43,7 @@ END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
 -- Composite index to optimize retention queries by received_at and endpoint_id
-CREATE INDEX idx_requests_retention ON requests (received_at, endpoint_id);
+CREATE INDEX IF NOT EXISTS idx_requests_retention ON requests (received_at, endpoint_id);
 
 -- Schedule daily cleanup at 3:00 AM UTC via pg_cron (if available)
 DO $$
@@ -52,6 +52,12 @@ BEGIN
     SELECT 1 FROM pg_available_extensions WHERE name = 'pg_cron'
   ) THEN
     CREATE EXTENSION IF NOT EXISTS pg_cron;
+    -- Unschedule first for idempotency (re-runnable migration)
+    BEGIN
+      PERFORM cron.unschedule('cleanup-expired-requests');
+    EXCEPTION WHEN OTHERS THEN
+      -- Job didn't exist yet — ignore
+    END;
     PERFORM cron.schedule(
       'cleanup-expired-requests',
       '0 3 * * *',

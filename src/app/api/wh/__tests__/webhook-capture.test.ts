@@ -864,6 +864,15 @@ describe('slug enumeration hardening (#10)', () => {
         break
       }
       case 'over-quota': {
+        // Reset mockFrom to return an active endpoint so the over-quota branch is actually exercised
+        const activeChain = setupEndpointQuery(mockEndpoint)
+        const subChain = setupSubscriptionQuery({ plan: 'free', status: 'active' })
+        mockFrom.mockImplementation((table: string) => {
+          if (table === 'profiles') return profileChain
+          if (table === 'endpoints') return activeChain
+          if (table === 'subscriptions') return subChain
+          return {}
+        })
         mockRpc.mockImplementation((fn: string) => {
           if (fn === 'get_current_usage') {
             return Promise.resolve({ data: [{ request_count: 100, ai_analysis_count: 0 }] })
@@ -877,9 +886,9 @@ describe('slug enumeration hardening (#10)', () => {
     const req = createRequest('POST', { body: '{}' })
     const res = await handleWebhook(req, { params })
     const body = await res.text()
-    const headerKeys = [...res.headers.keys()].sort()
+    const headerEntries = [...res.headers.entries()].sort(([a], [b]) => a.localeCompare(b))
 
-    return { status: res.status, body, headerKeys }
+    return { status: res.status, body, headerEntries }
   }
 
   it('returns byte-identical response bodies for all 404 scenarios', async () => {
@@ -900,16 +909,16 @@ describe('slug enumeration hardening (#10)', () => {
     expect(overQuota.body).toBe(profileNotFound.body)
   })
 
-  it('returns identical header key sets for all 404 scenarios', async () => {
+  it('returns identical headers (key+value) for all 404 scenarios', async () => {
     const profileNotFound = await capture404Response('profile-not-found')
     const endpointNotFound = await capture404Response('endpoint-not-found')
     const endpointInactive = await capture404Response('endpoint-inactive')
     const overQuota = await capture404Response('over-quota')
 
-    // All header key sets must be identical
-    expect(endpointNotFound.headerKeys).toEqual(profileNotFound.headerKeys)
-    expect(endpointInactive.headerKeys).toEqual(profileNotFound.headerKeys)
-    expect(overQuota.headerKeys).toEqual(profileNotFound.headerKeys)
+    // All header key+value pairs must be identical — prevents info leakage via differing headers
+    expect(endpointNotFound.headerEntries).toEqual(profileNotFound.headerEntries)
+    expect(endpointInactive.headerEntries).toEqual(profileNotFound.headerEntries)
+    expect(overQuota.headerEntries).toEqual(profileNotFound.headerEntries)
   })
 })
 

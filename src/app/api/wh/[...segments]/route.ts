@@ -62,8 +62,9 @@ async function readBodyWithLimit(req: NextRequest, maxBytes: number): Promise<Bo
       chunks.push(value)
     }
   } catch {
-    // If the stream errors out, treat whatever we have as the body
-    // This mirrors the previous req.text() behavior
+    // If the stream errors out, discard partial chunks — returning truncated
+    // data could cause corrupt payloads to be stored silently.
+    return { body: null, sizeBytes: totalBytes }
   }
 
   const decoder = new TextDecoder()

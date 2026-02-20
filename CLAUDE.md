@@ -39,6 +39,7 @@ websnag/
 │       ├── 001_initial_schema.sql
 │       ├── 002_rls_policies.sql
 │       ├── 003_usage_functions.sql
+│       ├── 004_profiles_and_usernames.sql
 │       └── 005_data_retention.sql   # Retention cleanup function + pg_cron schedule
 ├── src/
 │   ├── app/
