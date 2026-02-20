@@ -326,4 +326,7 @@ $RECYCLE.BIN/
 # Worktrees
 .claude/worktrees/
 
+# Plans
+docs/plans/
+
 # End of https://www.toptal.com/developers/gitignore/api/python,visualstudiocode,react,nextjs,macos,windows,linux
