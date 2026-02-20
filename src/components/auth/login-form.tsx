@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
 
 export function LoginForm() {
@@ -10,6 +10,13 @@ export function LoginForm() {
   const [error, setError] = useState<string | null>(null)
 
   const supabase = createClient()
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    if (params.get('intent') === 'upgrade') {
+      sessionStorage.setItem('upgrade_intent', 'true')
+    }
+  }, [])
 
   async function handleGitHubLogin() {
     setError(null)
