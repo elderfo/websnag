@@ -33,19 +33,32 @@ export default async function DashboardLayout({ children }: { children: React.Re
   })
 
   const requestCount = usageData?.[0]?.request_count ?? 0
+  const aiAnalysisCount = usageData?.[0]?.ai_analysis_count ?? 0
 
   return (
     <div className="min-h-screen bg-background">
       {/* Desktop sidebar — hidden on mobile */}
       <div className="hidden lg:block">
-        <Sidebar requestCount={requestCount} maxRequests={limits.maxRequestsPerMonth} />
+        <Sidebar
+          requestCount={requestCount}
+          maxRequests={limits.maxRequestsPerMonth}
+          aiAnalysisCount={aiAnalysisCount}
+          maxAiAnalyses={limits.maxAiAnalysesPerMonth}
+          plan={plan}
+        />
       </div>
 
       <div className="lg:pl-60">
         <Header
           userEmail={user.email ?? ''}
           mobileNav={
-            <MobileNav requestCount={requestCount} maxRequests={limits.maxRequestsPerMonth} />
+            <MobileNav
+              requestCount={requestCount}
+              maxRequests={limits.maxRequestsPerMonth}
+              aiAnalysisCount={aiAnalysisCount}
+              maxAiAnalyses={limits.maxAiAnalysesPerMonth}
+              plan={plan}
+            />
           }
         />
         <main className="p-4 sm:p-6">{children}</main>
