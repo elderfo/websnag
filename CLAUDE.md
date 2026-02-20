@@ -40,7 +40,8 @@ websnag/
 │       ├── 002_rls_policies.sql
 │       ├── 003_usage_functions.sql
 │       ├── 004_profiles_and_usernames.sql
-│       └── 005_data_retention.sql   # Retention cleanup function + pg_cron schedule
+│       ├── 005_data_retention.sql   # Retention cleanup function + pg_cron schedule
+│       └── 006_retention_alerting.sql  # RPC function to query pg_cron job run history
 ├── src/
 │   ├── app/
 │   │   ├── layout.tsx           # Root layout with providers
@@ -62,7 +63,10 @@ websnag/
 │   │       ├── wh/[slug]/route.ts     # Webhook capture endpoint (THE critical path)
 │   │       ├── analyze/route.ts       # AI analysis endpoint
 │   │       ├── replay/route.ts        # Replay webhook to target URL
-│   │       ├── health/route.ts       # Health check endpoint (DB connectivity)
+│   │       ├── health/
+│   │       │   ├── route.ts          # Health check endpoint (DB connectivity)
+│   │       │   └── retention/
+│   │       │       └── route.ts      # Retention job health check + Resend alerting
 │   │       ├── admin/
 │   │       │   └── retention/route.ts # Manual retention cleanup trigger
 │   │       └── stripe/
@@ -79,10 +83,12 @@ websnag/
 │   │   ├── supabase/
 │   │   │   ├── client.ts        # Browser Supabase client
 │   │   │   ├── server.ts        # Server-side Supabase client
-│   │   │   └── middleware.ts    # Auth middleware for protected routes
+│   │   │   ├── middleware.ts    # Auth middleware for protected routes
+│   │   │   └── cron.ts          # Query pg_cron job run history via RPC
 │   │   ├── stripe.ts            # Stripe client and helpers
 │   │   ├── anthropic.ts         # Claude API client and prompts
 │   │   ├── logger.ts             # Pino structured logger (createLogger, createRequestLogger)
+│   │   ├── retention-health.ts   # Pure retention job health evaluation logic
 │   │   ├── usage.ts             # Usage tracking and limit checking
 │   │   └── utils.ts             # Shared utilities
 │   ├── hooks/
