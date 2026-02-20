@@ -530,8 +530,10 @@ describe('handleWebhook (namespaced route /wh/[username]/[slug])', () => {
     const req = createRequest('POST', { body: '{}' })
     const res = await handleWebhook(req, { params })
 
-    // Response still goes through — don't penalise the webhook sender
-    expect(res.status).toBe(200)
+    // Insert failure now returns 500 so the webhook sender knows capture failed
+    expect(res.status).toBe(500)
+    const json = await res.json()
+    expect(json.error).toBe('Failed to capture request')
     expect(insertWithError.insert).toHaveBeenCalled()
   })
 

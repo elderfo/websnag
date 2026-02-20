@@ -16,7 +16,8 @@ export async function POST(req: Request) {
   let event: Stripe.Event
   try {
     event = stripe.webhooks.constructEvent(body, signature, process.env.STRIPE_WEBHOOK_SECRET!)
-  } catch {
+  } catch (error) {
+    log.warn({ err: error }, 'Stripe webhook signature verification failed')
     return NextResponse.json({ error: 'Invalid signature' }, { status: 400 })
   }
 
@@ -55,10 +56,10 @@ export async function POST(req: Request) {
 
       if (checkoutError) {
         log.error({ err: checkoutError, customerId }, 'checkout subscription update failed')
-      } else {
-        log.info({ customerId, subscriptionId }, 'checkout completed, upgraded to pro')
+        return NextResponse.json({ error: 'Database update failed' }, { status: 500 })
       }
 
+      log.info({ customerId, subscriptionId }, 'checkout completed, upgraded to pro')
       break
     }
 
@@ -115,13 +116,17 @@ export async function POST(req: Request) {
 
       if (subUpdateError) {
         log.error({ err: subUpdateError, customerId }, 'subscription update failed')
-      } else {
-        log.info(
-          { customerId, subscriptionStatus: subscription.status, cancelAtPeriodEnd: subscription.cancel_at_period_end },
-          'subscription updated'
-        )
+        return NextResponse.json({ error: 'Database update failed' }, { status: 500 })
       }
 
+      log.info(
+        {
+          customerId,
+          subscriptionStatus: subscription.status,
+          cancelAtPeriodEnd: subscription.cancel_at_period_end,
+        },
+        'subscription updated'
+      )
       break
     }
 
@@ -144,10 +149,10 @@ export async function POST(req: Request) {
 
       if (deleteError) {
         log.error({ err: deleteError, customerId }, 'subscription deletion update failed')
-      } else {
-        log.info({ customerId }, 'subscription deleted, downgraded to free')
+        return NextResponse.json({ error: 'Database update failed' }, { status: 500 })
       }
 
+      log.info({ customerId }, 'subscription deleted, downgraded to free')
       break
     }
 
@@ -167,10 +172,10 @@ export async function POST(req: Request) {
 
       if (paymentError) {
         log.error({ err: paymentError, customerId }, 'payment failed status update failed')
-      } else {
-        log.info({ customerId }, 'invoice payment failed, marked as past_due')
+        return NextResponse.json({ error: 'Database update failed' }, { status: 500 })
       }
 
+      log.info({ customerId }, 'invoice payment failed, marked as past_due')
       break
     }
   }

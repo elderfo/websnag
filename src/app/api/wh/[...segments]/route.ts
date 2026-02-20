@@ -23,25 +23,37 @@ function applyRateLimitHeaders(headers: Headers, rateLimitResult: RateLimitResul
   }
 }
 
-type BodyReadResult = { body: string; sizeBytes: number } | { body: null; sizeBytes: number }
+type BodyReadResult =
+  | { status: 'ok'; body: string; sizeBytes: number }
+  | { status: 'too_large'; sizeBytes: number }
+  | { status: 'stream_error'; sizeBytes: number }
 
 /**
  * Reads the request body with a byte-size limit. Checks Content-Length first
  * for an early reject, then streams chunks and aborts if the limit is exceeded.
+ *
+ * Returns a discriminated union:
+ * - `status: 'ok'` — body was read successfully
+ * - `status: 'too_large'` — Content-Length or streamed bytes exceeded maxBytes
+ * - `status: 'stream_error'` — stream read failed (partial data discarded)
  */
-async function readBodyWithLimit(req: NextRequest, maxBytes: number): Promise<BodyReadResult> {
+async function readBodyWithLimit(
+  req: NextRequest,
+  maxBytes: number,
+  log: ReturnType<typeof createRequestLogger>
+): Promise<BodyReadResult> {
   // Fast path: reject based on Content-Length header before reading any bytes
   const contentLength = req.headers.get('content-length')
   if (contentLength !== null) {
     const declared = parseInt(contentLength, 10)
     if (!isNaN(declared) && declared > maxBytes) {
-      return { body: null, sizeBytes: declared }
+      return { status: 'too_large', sizeBytes: declared }
     }
   }
 
   // No readable body (GET/HEAD or empty)
   if (!req.body) {
-    return { body: '', sizeBytes: 0 }
+    return { status: 'ok', body: '', sizeBytes: 0 }
   }
 
   const reader = req.body.getReader()
@@ -56,22 +68,23 @@ async function readBodyWithLimit(req: NextRequest, maxBytes: number): Promise<Bo
       totalBytes += value.byteLength
       if (totalBytes > maxBytes) {
         await reader.cancel()
-        return { body: null, sizeBytes: totalBytes }
+        return { status: 'too_large', sizeBytes: totalBytes }
       }
 
       chunks.push(value)
     }
-  } catch {
-    // If the stream errors out, discard partial chunks — returning truncated
-    // data could cause corrupt payloads to be stored silently.
-    return { body: null, sizeBytes: totalBytes }
+  } catch (error) {
+    // Discard partial chunks — returning truncated data could cause
+    // corrupt payloads to be stored silently.
+    log.error({ err: error, totalBytesRead: totalBytes }, 'request body stream read failed')
+    return { status: 'stream_error', sizeBytes: totalBytes }
   }
 
   const decoder = new TextDecoder()
   const body =
     chunks.map((chunk) => decoder.decode(chunk, { stream: true })).join('') + decoder.decode()
 
-  return { body, sizeBytes: totalBytes }
+  return { status: 'ok', body, sizeBytes: totalBytes }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -234,9 +247,18 @@ async function handleWebhookCapture(
   }
 
   // 4. Read body with streaming size limit
-  const { body, sizeBytes } = await readBodyWithLimit(req, MAX_BODY_SIZE)
+  const readResult = await readBodyWithLimit(req, MAX_BODY_SIZE, log)
 
-  if (body === null) {
+  if (readResult.status === 'stream_error') {
+    const errorHeaders = new Headers()
+    applyRateLimitHeaders(errorHeaders, primaryResult)
+    return NextResponse.json(
+      { error: 'Failed to read request body' },
+      { status: 500, headers: errorHeaders }
+    )
+  }
+
+  if (readResult.status === 'too_large') {
     const tooLargeHeaders = new Headers()
     applyRateLimitHeaders(tooLargeHeaders, primaryResult)
     return NextResponse.json(
@@ -244,6 +266,8 @@ async function handleWebhookCapture(
       { status: 413, headers: tooLargeHeaders }
     )
   }
+
+  const { body, sizeBytes } = readResult
 
   // 5. Check usage limits
   const { data: subscription } = await supabase
@@ -283,9 +307,10 @@ async function handleWebhookCapture(
 
   if (insertError) {
     log.error({ err: insertError, endpointId: endpoint.id }, 'request insert failed')
-  } else {
-    log.info({ endpointId: endpoint.id, method: req.method, sizeBytes }, 'webhook captured')
+    return NextResponse.json({ error: 'Failed to capture request' }, { status: 500 })
   }
+
+  log.info({ endpointId: endpoint.id, method: req.method, sizeBytes }, 'webhook captured')
 
   // 7. Increment usage counter
   const { error: rpcError } = await supabase.rpc('increment_request_count', {

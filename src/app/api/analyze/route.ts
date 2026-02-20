@@ -79,10 +79,23 @@ export async function POST(req: Request) {
     }
 
     // Store result
-    await admin.from('requests').update({ ai_analysis: analysis }).eq('id', requestId)
+    const { error: updateError } = await admin
+      .from('requests')
+      .update({ ai_analysis: analysis })
+      .eq('id', requestId)
+
+    if (updateError) {
+      log.error({ err: updateError, requestId }, 'failed to store analysis result')
+    }
 
     // Increment usage
-    await admin.rpc('increment_ai_analysis_count', { p_user_id: user.id })
+    const { error: rpcError } = await admin.rpc('increment_ai_analysis_count', {
+      p_user_id: user.id,
+    })
+
+    if (rpcError) {
+      log.error({ err: rpcError, userId: user.id }, 'failed to increment AI analysis count')
+    }
 
     log.info({ requestId, userId: user.id, source: analysis.source }, 'AI analysis completed')
 

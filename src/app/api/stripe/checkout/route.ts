@@ -36,7 +36,7 @@ export async function POST() {
       customerId = customer.id
 
       // Upsert the subscription row with the customer ID
-      await admin.from('subscriptions').upsert(
+      const { error: upsertError } = await admin.from('subscriptions').upsert(
         {
           user_id: user.id,
           stripe_customer_id: customerId,
@@ -45,6 +45,11 @@ export async function POST() {
         },
         { onConflict: 'user_id' }
       )
+
+      if (upsertError) {
+        log.error({ err: upsertError, userId: user.id }, 'subscription upsert failed')
+        return NextResponse.json({ error: 'Failed to initialize subscription' }, { status: 500 })
+      }
     }
 
     const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'

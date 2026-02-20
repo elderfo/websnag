@@ -1,7 +1,11 @@
 -- Data retention cleanup function
 -- Deletes expired requests based on subscription tier:
---   Free tier (no active pro subscription): 24 hours
---   Pro tier (active pro subscription): 30 days
+--   Free tier (no active or trialing pro subscription): 24 hours
+--   Pro tier (active or trialing pro subscription): 30 days
+--
+-- Note: 'trialing' is treated as Pro for retention purposes, even though
+-- the application-layer getUserPlan() treats it as free for quota enforcement.
+-- This is intentional: trial users should not lose data during their trial.
 
 CREATE OR REPLACE FUNCTION cleanup_expired_requests()
 RETURNS TABLE (free_deleted BIGINT, pro_deleted BIGINT) AS $$
@@ -10,7 +14,7 @@ DECLARE
   v_pro_deleted BIGINT;
 BEGIN
   -- Delete free-tier requests older than 24 hours
-  -- Free tier = no subscription row, or plan != 'pro', or status != 'active'
+  -- Free tier = no subscription row, or plan != 'pro', or status not in ('active', 'trialing')
   WITH deleted AS (
     DELETE FROM requests r
     WHERE r.received_at < now() - interval '24 hours'
@@ -40,7 +44,7 @@ BEGIN
   pro_deleted := v_pro_deleted;
   RETURN NEXT;
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
 
 -- Composite index to optimize retention queries by received_at and endpoint_id
 CREATE INDEX IF NOT EXISTS idx_requests_retention ON requests (received_at, endpoint_id);
