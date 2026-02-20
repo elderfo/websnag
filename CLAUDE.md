@@ -61,6 +61,7 @@ websnag/
 │   │       ├── wh/[slug]/route.ts     # Webhook capture endpoint (THE critical path)
 │   │       ├── analyze/route.ts       # AI analysis endpoint
 │   │       ├── replay/route.ts        # Replay webhook to target URL
+│   │       ├── health/route.ts       # Health check endpoint (DB connectivity)
 │   │       ├── admin/
 │   │       │   └── retention/route.ts # Manual retention cleanup trigger
 │   │       └── stripe/
@@ -80,6 +81,7 @@ websnag/
 │   │   │   └── middleware.ts    # Auth middleware for protected routes
 │   │   ├── stripe.ts            # Stripe client and helpers
 │   │   ├── anthropic.ts         # Claude API client and prompts
+│   │   ├── logger.ts             # Pino structured logger (createLogger, createRequestLogger)
 │   │   ├── usage.ts             # Usage tracking and limit checking
 │   │   └── utils.ts             # Shared utilities
 │   ├── hooks/
