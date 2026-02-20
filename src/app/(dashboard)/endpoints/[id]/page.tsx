@@ -82,6 +82,9 @@ export default async function EndpointDetailPage({ params }: EndpointDetailPageP
               </code>
               <CopyButton text={webhookUrl} label="Copy URL" />
             </div>
+            <p className="text-xs text-zinc-500 mt-2">
+              Maximum payload size: 1 MB. Requests exceeding this limit receive a 413 response.
+            </p>
           </div>
 
           <div className="mt-4 rounded-lg border border-border bg-surface p-4">
