@@ -21,6 +21,12 @@ export default async function SettingsPage() {
 
   const plan = getUserPlan(subscription)
 
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('username')
+    .eq('id', user.id)
+    .single()
+
   return (
     <div className="mx-auto max-w-2xl space-y-6">
       <div>
@@ -28,7 +34,12 @@ export default async function SettingsPage() {
         <p className="mt-1 text-sm text-text-secondary">Manage your account settings.</p>
       </div>
 
-      <SettingsClient email={user.email ?? ''} createdAt={user.created_at} plan={plan} />
+      <SettingsClient
+        email={user.email ?? ''}
+        createdAt={user.created_at}
+        plan={plan}
+        initialUsername={profile?.username ?? null}
+      />
     </div>
   )
 }

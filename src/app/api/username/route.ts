@@ -62,19 +62,42 @@ export async function POST(req: Request) {
 
     const { username } = parsed.data
 
+    // Blocked usernames return same response as "taken" — no information leak
     if (isBlockedUsername(username)) {
-      return NextResponse.json({ error: 'This username is not available' }, { status: 400 })
+      return NextResponse.json({ error: 'Username already taken' }, { status: 409 })
+    }
+
+    // Check if user already has a username — usernames are immutable once set.
+    // Fail closed: if the query errors, do NOT proceed to upsert.
+    const admin = createAdminClient()
+    const { data: existingProfile, error: profileError } = await admin
+      .from('profiles')
+      .select('username')
+      .eq('id', user.id)
+      .single()
+
+    if (profileError && profileError.code !== 'PGRST116') {
+      console.error('[username] POST profile lookup error:', profileError)
+      return NextResponse.json({ error: 'Failed to verify username status' }, { status: 500 })
+    }
+
+    if (existingProfile?.username) {
+      return NextResponse.json({ error: 'Username cannot be changed once set' }, { status: 403 })
     }
 
     // Check uniqueness via admin client (bypasses RLS to see all profiles)
-    const admin = createAdminClient()
-    const { data: existing } = await admin
+    const { data: existing, error: uniquenessError } = await admin
       .from('profiles')
       .select('id')
       .eq('username', username)
       .single()
 
-    if (existing && existing.id !== user.id) {
+    if (uniquenessError && uniquenessError.code !== 'PGRST116') {
+      console.error('[username] POST uniqueness check error:', uniquenessError)
+      return NextResponse.json({ error: 'Failed to verify username availability' }, { status: 500 })
+    }
+
+    if (existing) {
       return NextResponse.json({ error: 'Username already taken' }, { status: 409 })
     }
 

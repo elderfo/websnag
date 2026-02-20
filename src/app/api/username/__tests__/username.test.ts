@@ -257,11 +257,11 @@ describe('POST /api/username', () => {
 
     const username32 = 'a'.repeat(32)
 
-    // Admin from: first call uniqueness check (no row), second upsert
+    // Admin from: 1st = immutability (no profile), 2nd = uniqueness (no match), 3rd = upsert
     let adminCallCount = 0
     mockAdminFrom.mockImplementation(() => {
       adminCallCount++
-      if (adminCallCount === 1) {
+      if (adminCallCount <= 2) {
         return createChain({ data: null, error: { code: 'PGRST116' } })
       }
       return createChain({ data: { id: 'user-1', username: username32 }, error: null })
@@ -296,7 +296,7 @@ describe('POST /api/username', () => {
     expect(body.error).toBe('Invalid username format')
   })
 
-  it('returns 400 for blocked reserved username', async () => {
+  it('returns 409 for blocked reserved username — indistinguishable from taken', async () => {
     mockGetUser.mockResolvedValue({ data: { user: { id: 'user-1' } } })
 
     const { POST } = await import('../route')
@@ -307,12 +307,13 @@ describe('POST /api/username', () => {
     })
     const response = await POST(request)
 
-    expect(response.status).toBe(400)
+    expect(response.status).toBe(409)
     const body = await response.json()
-    expect(body.error).toBe('This username is not available')
+    // Must be indistinguishable from a genuinely taken username
+    expect(body.error).toBe('Username already taken')
   })
 
-  it('returns 400 for blocked username — case insensitive check', async () => {
+  it('returns 409 for blocked username — case insensitive check', async () => {
     mockGetUser.mockResolvedValue({ data: { user: { id: 'user-1' } } })
 
     const { POST } = await import('../route')
@@ -323,16 +324,43 @@ describe('POST /api/username', () => {
     })
     const response = await POST(request)
 
-    expect(response.status).toBe(400)
+    expect(response.status).toBe(409)
     const body = await response.json()
-    expect(body.error).toBe('This username is not available')
+    expect(body.error).toBe('Username already taken')
+  })
+
+  it('returns 403 when user already has a username (immutable)', async () => {
+    mockGetUser.mockResolvedValue({ data: { user: { id: 'user-1' } } })
+
+    // Admin from: immutability check returns existing username
+    mockAdminFrom.mockReturnValue(createChain({ data: { username: 'existinguser' }, error: null }))
+
+    const { POST } = await import('../route')
+    const request = new Request('http://localhost/api/username', {
+      method: 'POST',
+      body: JSON.stringify({ username: 'newname' }),
+      headers: { 'Content-Type': 'application/json' },
+    })
+    const response = await POST(request)
+
+    expect(response.status).toBe(403)
+    const body = await response.json()
+    expect(body.error).toBe('Username cannot be changed once set')
   })
 
   it('returns 409 when username is already taken by another user', async () => {
     mockGetUser.mockResolvedValue({ data: { user: { id: 'user-1' } } })
 
-    const existingChain = createChain({ data: { id: 'user-2' }, error: null })
-    mockAdminFrom.mockReturnValue(existingChain)
+    let adminCallCount = 0
+    mockAdminFrom.mockImplementation(() => {
+      adminCallCount++
+      if (adminCallCount === 1) {
+        // immutability check: no existing username
+        return createChain({ data: null, error: { code: 'PGRST116' } })
+      }
+      // uniqueness check: taken by another user
+      return createChain({ data: { id: 'user-2' }, error: null })
+    })
 
     const { POST } = await import('../route')
     const request = new Request('http://localhost/api/username', {
@@ -354,6 +382,10 @@ describe('POST /api/username', () => {
     mockAdminFrom.mockImplementation(() => {
       adminCallCount++
       if (adminCallCount === 1) {
+        // immutability check: no existing username
+        return createChain({ data: null, error: { code: 'PGRST116' } })
+      }
+      if (adminCallCount === 2) {
         // uniqueness SELECT passes (no race detected at read time)
         return createChain({ data: null, error: { code: 'PGRST116' } })
       }
@@ -383,6 +415,11 @@ describe('POST /api/username', () => {
     mockAdminFrom.mockImplementation(() => {
       adminCallCount++
       if (adminCallCount === 1) {
+        // immutability check: no existing username
+        return createChain({ data: null, error: { code: 'PGRST116' } })
+      }
+      if (adminCallCount === 2) {
+        // uniqueness check: no existing row
         return createChain({ data: null, error: { code: 'PGRST116' } })
       }
       return createChain({ data: null, error: { code: 'PGRST500', message: 'internal db error' } })
@@ -406,17 +443,16 @@ describe('POST /api/username', () => {
   it('succeeds with valid unique username', async () => {
     mockGetUser.mockResolvedValue({ data: { user: { id: 'user-1' } } })
 
-    // Admin from: first call is uniqueness check (no existing user), second is upsert
+    // Admin from: 1st = immutability (no profile), 2nd = uniqueness (no match), 3rd = upsert
     let adminCallCount = 0
     mockAdminFrom.mockImplementation(() => {
       adminCallCount++
-      if (adminCallCount === 1) {
-        // uniqueness check: no existing row
+      if (adminCallCount <= 2) {
+        // immutability check and uniqueness check: no existing row
         return createChain({ data: null, error: { code: 'PGRST116' } })
       }
       // upsert call
-      const chain = createChain({ data: { id: 'user-1', username: 'johndoe' }, error: null })
-      return chain
+      return createChain({ data: { id: 'user-1', username: 'johndoe' }, error: null })
     })
 
     const { POST } = await import('../route')
@@ -430,32 +466,6 @@ describe('POST /api/username', () => {
     expect(response.status).toBe(200)
     const body = await response.json()
     expect(body.username).toBe('johndoe')
-  })
-
-  it('allows a user to update their own username without 409', async () => {
-    mockGetUser.mockResolvedValue({ data: { user: { id: 'user-1' } } })
-
-    // Admin from: uniqueness check returns the same user id
-    let adminCallCount = 0
-    mockAdminFrom.mockImplementation(() => {
-      adminCallCount++
-      if (adminCallCount === 1) {
-        return createChain({ data: { id: 'user-1' }, error: null })
-      }
-      return createChain({ data: { id: 'user-1', username: 'newhandle' }, error: null })
-    })
-
-    const { POST } = await import('../route')
-    const request = new Request('http://localhost/api/username', {
-      method: 'POST',
-      body: JSON.stringify({ username: 'newhandle' }),
-      headers: { 'Content-Type': 'application/json' },
-    })
-    const response = await POST(request)
-
-    expect(response.status).toBe(200)
-    const body = await response.json()
-    expect(body.username).toBe('newhandle')
   })
 
   it('returns 500 when an unexpected exception is thrown', async () => {
@@ -472,5 +482,55 @@ describe('POST /api/username', () => {
     expect(response.status).toBe(500)
     const body = await response.json()
     expect(body.error).toBe('Internal server error')
+  })
+
+  it('returns 500 when immutability check query fails (not PGRST116)', async () => {
+    mockGetUser.mockResolvedValue({ data: { user: { id: 'user-1' } } })
+
+    // Immutability check returns a real DB error
+    mockAdminFrom.mockReturnValue(
+      createChain({ data: null, error: { code: 'PGRST500', message: 'connection refused' } })
+    )
+
+    const { POST } = await import('../route')
+    const request = new Request('http://localhost/api/username', {
+      method: 'POST',
+      body: JSON.stringify({ username: 'johndoe' }),
+      headers: { 'Content-Type': 'application/json' },
+    })
+    const response = await POST(request)
+
+    expect(response.status).toBe(500)
+    const body = await response.json()
+    expect(body.error).toBe('Failed to verify username status')
+    // Must not proceed to upsert when immutability check fails
+    expect(body.error).not.toContain('connection refused')
+  })
+
+  it('returns 500 when uniqueness check query fails (not PGRST116)', async () => {
+    mockGetUser.mockResolvedValue({ data: { user: { id: 'user-1' } } })
+
+    let adminCallCount = 0
+    mockAdminFrom.mockImplementation(() => {
+      adminCallCount++
+      if (adminCallCount === 1) {
+        // immutability check: no existing username
+        return createChain({ data: null, error: { code: 'PGRST116' } })
+      }
+      // uniqueness check: DB error
+      return createChain({ data: null, error: { code: 'PGRST500', message: 'timeout' } })
+    })
+
+    const { POST } = await import('../route')
+    const request = new Request('http://localhost/api/username', {
+      method: 'POST',
+      body: JSON.stringify({ username: 'johndoe' }),
+      headers: { 'Content-Type': 'application/json' },
+    })
+    const response = await POST(request)
+
+    expect(response.status).toBe(500)
+    const body = await response.json()
+    expect(body.error).toBe('Failed to verify username availability')
   })
 })
