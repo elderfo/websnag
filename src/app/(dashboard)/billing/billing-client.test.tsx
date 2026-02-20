@@ -276,8 +276,7 @@ describe('BillingClient', () => {
       json: async () => ({ url: '/portal' }),
     } as Response)
 
-    // @ts-expect-error - test override of global fetch
-    globalThis.fetch = fetchMock
+    vi.stubGlobal('fetch', fetchMock)
 
     render(
       <BillingClient
@@ -296,6 +295,6 @@ describe('BillingClient', () => {
     const user = userEvent.setup()
     await user.click(screen.getByRole('button', { name: /Re-subscribe/ }))
 
-    expect(fetchMock).toHaveBeenCalled()
+    expect(fetchMock).toHaveBeenCalledWith('/api/stripe/portal', { method: 'POST' })
   })
 })

@@ -84,6 +84,7 @@ export async function POST(req: Request) {
         const { error } = await supabase
           .from('subscriptions')
           .update({
+            plan: 'pro',
             status: 'active',
             current_period_end: periodEnd,
             cancel_at_period_end: true,

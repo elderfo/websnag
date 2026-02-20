@@ -159,6 +159,7 @@ describe('POST /api/stripe/webhook', () => {
     expect(res.status).toBe(200)
 
     expect(updateMock).toHaveBeenCalledWith({
+      plan: 'pro',
       status: 'active',
       current_period_end: new Date(1700000000 * 1000).toISOString(),
       cancel_at_period_end: true,
