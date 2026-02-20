@@ -27,6 +27,16 @@ vi.mock('@/lib/anthropic', () => ({
   analyzeWebhook: (...args: unknown[]) => mockAnalyzeWebhook(...args),
 }))
 
+vi.mock('@/lib/logger', () => ({
+  createRequestLogger: () => ({
+    info: vi.fn(),
+    error: vi.fn(),
+    warn: vi.fn(),
+    debug: vi.fn(),
+    requestId: 'test-request-id',
+  }),
+}))
+
 function makeRequest(body: unknown): Request {
   return new Request('http://localhost:3000/api/analyze', {
     method: 'POST',

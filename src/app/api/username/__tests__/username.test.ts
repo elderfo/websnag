@@ -20,6 +20,16 @@ vi.mock('@/lib/supabase/admin', () => ({
   })),
 }))
 
+vi.mock('@/lib/logger', () => ({
+  createRequestLogger: () => ({
+    info: vi.fn(),
+    error: vi.fn(),
+    warn: vi.fn(),
+    debug: vi.fn(),
+    requestId: 'test-request-id',
+  }),
+}))
+
 // Helper to create a chainable query mock
 function createChain(result: { data?: unknown; error?: unknown }) {
   const terminal = vi.fn().mockResolvedValue(result)

@@ -1,5 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { createRequestLogger } from '@/lib/logger'
 import { analyzeWebhook } from '@/lib/anthropic'
 import { analyzeRequestSchema } from '@/lib/validators'
 import { canAnalyze, getUserPlan } from '@/lib/usage'
@@ -8,6 +9,7 @@ import { APIError } from '@anthropic-ai/sdk'
 import type { AiAnalysis } from '@/types'
 
 export async function POST(req: Request) {
+  const log = createRequestLogger('analyze')
   try {
     const supabase = await createClient()
     const {
@@ -66,10 +68,10 @@ export async function POST(req: Request) {
       )
     } catch (error) {
       if (error instanceof APIError) {
-        console.error('Anthropic API error:', error)
+        log.error({ err: error, requestId: requestId }, 'Anthropic API error')
         return NextResponse.json({ error: 'AI service unavailable' }, { status: 502 })
       }
-      console.error('AI analysis response validation failed:', error)
+      log.error({ err: error, requestId: requestId }, 'AI analysis response validation failed')
       return NextResponse.json(
         { error: 'AI analysis produced an invalid response' },
         { status: 502 }
@@ -84,7 +86,7 @@ export async function POST(req: Request) {
 
     return NextResponse.json(analysis)
   } catch (error) {
-    console.error('Analysis error:', error)
+    log.error({ err: error }, 'analysis failed')
     return NextResponse.json({ error: 'Analysis failed' }, { status: 500 })
   }
 }

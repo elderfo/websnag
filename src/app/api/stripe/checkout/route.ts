@@ -1,6 +1,7 @@
 import { stripe } from '@/lib/stripe'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { createClient } from '@/lib/supabase/server'
+import { createRequestLogger } from '@/lib/logger'
 import { NextResponse } from 'next/server'
 
 export async function POST() {
@@ -63,7 +64,8 @@ export async function POST() {
 
     return NextResponse.json({ url: session.url })
   } catch (error) {
-    console.error('Stripe checkout error:', error)
+    const log = createRequestLogger('stripe-checkout')
+    log.error({ err: error }, 'checkout session creation failed')
     return NextResponse.json({ error: 'Failed to create checkout session' }, { status: 500 })
   }
 }

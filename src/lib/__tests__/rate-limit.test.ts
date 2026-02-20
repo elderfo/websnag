@@ -12,6 +12,16 @@ vi.mock('@upstash/redis', () => {
   }
 })
 
+// Mock the logger module
+vi.mock('@/lib/logger', () => ({
+  createLogger: () => ({
+    info: vi.fn(),
+    error: vi.fn(),
+    warn: vi.fn(),
+    debug: vi.fn(),
+  }),
+}))
+
 // Mock @upstash/ratelimit
 const mockLimit = vi.fn()
 

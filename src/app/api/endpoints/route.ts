@@ -1,11 +1,13 @@
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { createRequestLogger } from '@/lib/logger'
 import { createEndpointSchema } from '@/lib/validators'
 import { canCreateEndpoint, getUserPlan } from '@/lib/usage'
 import { generateSlug, isValidCustomSlug } from '@/lib/utils'
 import { NextResponse } from 'next/server'
 
 export async function GET() {
+  const log = createRequestLogger('endpoints')
   try {
     const supabase = await createClient()
     const {
@@ -22,18 +24,19 @@ export async function GET() {
       .order('created_at', { ascending: false })
 
     if (error) {
-      console.error('[endpoints] GET query error:', error)
+      log.error({ err: error }, 'GET query failed')
       return NextResponse.json({ error: 'Failed to fetch endpoints' }, { status: 500 })
     }
 
     return NextResponse.json(data)
   } catch (err) {
-    console.error('[endpoints] GET unhandled error:', err)
+    log.error({ err }, 'GET unhandled error')
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }
 
 export async function POST(request: Request) {
+  const log = createRequestLogger('endpoints')
   try {
     const supabase = await createClient()
     const {
@@ -53,7 +56,7 @@ export async function POST(request: Request) {
       .single()
 
     if (profileError && profileError.code !== 'PGRST116') {
-      console.error('[endpoints] POST profile query error:', profileError)
+      log.error({ err: profileError }, 'POST profile query failed')
       return NextResponse.json({ error: 'Failed to fetch profile' }, { status: 500 })
     }
 
@@ -98,7 +101,7 @@ export async function POST(request: Request) {
       .eq('user_id', user.id)
 
     if (countError) {
-      console.error('[endpoints] POST count query error:', countError)
+      log.error({ err: countError }, 'POST endpoint count query failed')
       return NextResponse.json({ error: 'Failed to check endpoint limit' }, { status: 500 })
     }
 
@@ -166,13 +169,13 @@ export async function POST(request: Request) {
       .single()
 
     if (insertError) {
-      console.error('[endpoints] POST insert error:', insertError)
+      log.error({ err: insertError }, 'POST endpoint insert failed')
       return NextResponse.json({ error: 'Failed to create endpoint' }, { status: 500 })
     }
 
     return NextResponse.json(endpoint, { status: 201 })
   } catch (err) {
-    console.error('[endpoints] POST unhandled error:', err)
+    log.error({ err }, 'POST unhandled error')
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }

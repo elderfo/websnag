@@ -16,6 +16,12 @@ vi.mock('@/lib/supabase/admin', () => ({
 
 // Mock the logger module
 vi.mock('@/lib/logger', () => ({
+  createLogger: () => ({
+    info: vi.fn(),
+    error: vi.fn(),
+    warn: vi.fn(),
+    debug: vi.fn(),
+  }),
   createRequestLogger: () => ({
     info: vi.fn(),
     error: vi.fn(),

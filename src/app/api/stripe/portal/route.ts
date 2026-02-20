@@ -1,5 +1,6 @@
 import { stripe } from '@/lib/stripe'
 import { createClient } from '@/lib/supabase/server'
+import { createRequestLogger } from '@/lib/logger'
 import { NextResponse } from 'next/server'
 
 export async function POST() {
@@ -32,7 +33,8 @@ export async function POST() {
 
     return NextResponse.json({ url: session.url })
   } catch (error) {
-    console.error('Stripe portal error:', error)
+    const log = createRequestLogger('stripe-portal')
+    log.error({ err: error }, 'portal session creation failed')
     return NextResponse.json({ error: 'Failed to create portal session' }, { status: 500 })
   }
 }
