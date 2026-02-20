@@ -1,32 +1,95 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import type { WebhookRequest } from '@/types'
+import type { WebhookRequest, RequestFilters } from '@/types'
 
-export function useRealtimeRequests(endpointId: string) {
+const PAGE_SIZE = 50
+
+function matchesFilters(request: WebhookRequest, filters: RequestFilters): boolean {
+  if (filters.method && request.method !== filters.method) return false
+  if (filters.dateFrom && request.received_at < filters.dateFrom) return false
+  if (filters.dateTo && request.received_at > filters.dateTo) return false
+  if (filters.search && !(request.body ?? '').toLowerCase().includes(filters.search.toLowerCase())) {
+    return false
+  }
+  return true
+}
+
+export function useRealtimeRequests(endpointId: string, filters: RequestFilters = {}) {
   const [requests, setRequests] = useState<WebhookRequest[]>([])
   const [loading, setLoading] = useState(true)
+  const [hasMore, setHasMore] = useState(false)
+  const [loadingMore, setLoadingMore] = useState(false)
 
-  useEffect(() => {
-    const supabase = createClient()
+  // Fetch with current filters
+  const fetchRequests = useCallback(
+    async (cursor?: string) => {
+      const supabase = createClient()
 
-    // Initial fetch
-    async function fetchRequests() {
-      const { data } = await supabase
+      let query = supabase
         .from('requests')
         .select('*')
         .eq('endpoint_id', endpointId)
         .order('received_at', { ascending: false })
-        .limit(50)
+        .limit(PAGE_SIZE + 1) // Fetch one extra to detect hasMore
 
-      if (data) setRequests(data as WebhookRequest[])
+      if (filters.method) {
+        query = query.eq('method', filters.method)
+      }
+      if (filters.dateFrom) {
+        query = query.gte('received_at', filters.dateFrom)
+      }
+      if (filters.dateTo) {
+        query = query.lte('received_at', filters.dateTo)
+      }
+      if (filters.search) {
+        query = query.ilike('body', `%${filters.search}%`)
+      }
+      if (cursor) {
+        query = query.lt('received_at', cursor)
+      }
+
+      const { data } = await query
+
+      if (data) {
+        const hasNextPage = data.length > PAGE_SIZE
+        const pageData = hasNextPage ? data.slice(0, PAGE_SIZE) : data
+        return { requests: pageData as WebhookRequest[], hasMore: hasNextPage }
+      }
+
+      return { requests: [], hasMore: false }
+    },
+    [endpointId, filters.method, filters.dateFrom, filters.dateTo, filters.search]
+  )
+
+  // Initial fetch (resets on filter change)
+  useEffect(() => {
+    setLoading(true)
+    fetchRequests().then(({ requests: data, hasMore: more }) => {
+      setRequests(data)
+      setHasMore(more)
       setLoading(false)
-    }
+    })
+  }, [fetchRequests])
 
-    fetchRequests()
+  // Load more (next page)
+  const loadMore = useCallback(async () => {
+    if (loadingMore || !hasMore || requests.length === 0) return
 
-    // Realtime subscription
+    setLoadingMore(true)
+    const lastRequest = requests[requests.length - 1]
+    const { requests: nextPage, hasMore: more } = await fetchRequests(lastRequest.received_at)
+
+    setRequests((prev) => [...prev, ...nextPage])
+    setHasMore(more)
+    setLoadingMore(false)
+  }, [loadingMore, hasMore, requests, fetchRequests])
+
+  // Realtime subscription (unfiltered — new requests always arrive)
+  useEffect(() => {
+    const supabase = createClient()
+
     const channel = supabase
       .channel(`endpoint-${endpointId}`)
       .on(
@@ -38,7 +101,11 @@ export function useRealtimeRequests(endpointId: string) {
           filter: `endpoint_id=eq.${endpointId}`,
         },
         (payload) => {
-          setRequests((prev) => [payload.new as WebhookRequest, ...prev])
+          const newRequest = payload.new as WebhookRequest
+          // Only prepend if it matches current filters
+          if (matchesFilters(newRequest, filters)) {
+            setRequests((prev) => [newRequest, ...prev])
+          }
         }
       )
       .subscribe()
@@ -46,7 +113,17 @@ export function useRealtimeRequests(endpointId: string) {
     return () => {
       supabase.removeChannel(channel)
     }
-  }, [endpointId])
+  }, [endpointId, filters])
 
-  return { requests, loading }
+  // Remove a request from local state (after delete)
+  const removeRequest = useCallback((id: string) => {
+    setRequests((prev) => prev.filter((r) => r.id !== id))
+  }, [])
+
+  const removeRequests = useCallback((ids: string[]) => {
+    const idSet = new Set(ids)
+    setRequests((prev) => prev.filter((r) => !idSet.has(r.id)))
+  }, [])
+
+  return { requests, loading, hasMore, loadingMore, loadMore, removeRequest, removeRequests }
 }
