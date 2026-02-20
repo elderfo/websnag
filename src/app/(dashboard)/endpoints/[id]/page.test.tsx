@@ -222,10 +222,10 @@ describe('EndpointDetailPage', () => {
       expect(screen.queryByText('cURL Example')).not.toBeInTheDocument()
     })
 
-    it('passes empty string to RequestFeed', async () => {
+    it('does not render RequestFeed', async () => {
       const Page = await EndpointDetailPage({ params: Promise.resolve({ id: 'ep-1' }) })
       render(Page)
-      expect(screen.getByTestId('request-feed')).toHaveTextContent('')
+      expect(screen.queryByTestId('request-feed')).not.toBeInTheDocument()
     })
   })
 })

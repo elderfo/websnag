@@ -98,13 +98,13 @@ export default async function EndpointDetailPage({ params }: EndpointDetailPageP
               />
             </div>
           </div>
+
+          <div className="mt-8">
+            <h2 className="text-lg font-semibold text-text-primary mb-4">Request Feed</h2>
+            <RequestFeed endpointId={endpoint.id} endpointUrl={webhookUrl} />
+          </div>
         </>
       )}
-
-      <div className="mt-8">
-        <h2 className="text-lg font-semibold text-text-primary mb-4">Request Feed</h2>
-        <RequestFeed endpointId={endpoint.id} endpointUrl={webhookUrl ?? ''} />
-      </div>
     </div>
   )
 }
