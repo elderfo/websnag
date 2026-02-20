@@ -10,23 +10,33 @@ interface EndpointDetailPageProps {
   params: Promise<{ id: string }>
 }
 
-function getWebhookUrl(slug: string): string {
+function getWebhookUrl(username: string, slug: string): string {
   const baseUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000'
-  return `${baseUrl}/api/wh/${slug}`
+  return `${baseUrl}/api/wh/${username}/${slug}`
 }
 
 export default async function EndpointDetailPage({ params }: EndpointDetailPageProps) {
   const { id } = await params
   const supabase = await createClient()
 
-  const { data, error } = await supabase.from('endpoints').select('*').eq('id', id).single()
+  const [endpointResult, userResult] = await Promise.all([
+    supabase.from('endpoints').select('*').eq('id', id).single(),
+    supabase.auth.getUser(),
+  ])
 
-  if (error || !data) {
+  if (endpointResult.error || !endpointResult.data) {
     notFound()
   }
 
-  const endpoint = data as Endpoint
-  const webhookUrl = getWebhookUrl(endpoint.slug)
+  const endpoint = endpointResult.data as Endpoint
+  const user = userResult.data.user
+
+  const profileResult = user
+    ? await supabase.from('profiles').select('username').eq('id', user.id).single()
+    : null
+
+  const username = profileResult?.data?.username ?? null
+  const webhookUrl = username ? getWebhookUrl(username, endpoint.slug) : null
 
   return (
     <div>
@@ -49,37 +59,52 @@ export default async function EndpointDetailPage({ params }: EndpointDetailPageP
         <p className="mt-2 text-sm text-text-secondary">{endpoint.description}</p>
       )}
 
-      <div className="mt-6 rounded-lg border border-border bg-surface p-4">
-        <p className="mb-2 text-xs font-medium uppercase tracking-wider text-text-muted">
-          Webhook URL
-        </p>
-        <div className="flex items-center gap-3">
-          <code className="flex-1 rounded bg-background px-3 py-2 font-mono text-sm text-accent">
-            {webhookUrl}
-          </code>
-          <CopyButton text={webhookUrl} label="Copy URL" />
+      {webhookUrl === null ? (
+        <div className="mt-6 rounded-lg border border-yellow-500/40 bg-yellow-500/10 p-4">
+          <p className="text-sm font-medium text-yellow-400">Username required</p>
+          <p className="mt-1 text-sm text-text-secondary">
+            You must set a username before your webhook URL is available.{' '}
+            <Link href="/settings" className="text-accent underline hover:text-accent-hover">
+              Go to Settings
+            </Link>{' '}
+            to set your username.
+          </p>
         </div>
-      </div>
+      ) : (
+        <>
+          <div className="mt-6 rounded-lg border border-border bg-surface p-4">
+            <p className="mb-2 text-xs font-medium uppercase tracking-wider text-text-muted">
+              Webhook URL
+            </p>
+            <div className="flex items-center gap-3">
+              <code className="flex-1 rounded bg-background px-3 py-2 font-mono text-sm text-accent">
+                {webhookUrl}
+              </code>
+              <CopyButton text={webhookUrl} label="Copy URL" />
+            </div>
+          </div>
 
-      <div className="mt-4 rounded-lg border border-border bg-surface p-4">
-        <p className="mb-2 text-xs font-medium uppercase tracking-wider text-text-muted">
-          cURL Example
-        </p>
-        <div className="flex items-center gap-3">
-          <code className="flex-1 truncate rounded bg-background px-3 py-2 font-mono text-xs text-text-secondary">
-            {`curl -X POST ${webhookUrl} -H "Content-Type: application/json" -d '{"test": true}'`}
-          </code>
-          <CopyButton
-            text={`curl -X POST ${webhookUrl} -H "Content-Type: application/json" -d '{"test": true}'`}
-            label="Copy"
-          />
-        </div>
-      </div>
+          <div className="mt-4 rounded-lg border border-border bg-surface p-4">
+            <p className="mb-2 text-xs font-medium uppercase tracking-wider text-text-muted">
+              cURL Example
+            </p>
+            <div className="flex items-center gap-3">
+              <code className="flex-1 truncate rounded bg-background px-3 py-2 font-mono text-xs text-text-secondary">
+                {`curl -X POST ${webhookUrl} -H "Content-Type: application/json" -d '{"test": true}'`}
+              </code>
+              <CopyButton
+                text={`curl -X POST ${webhookUrl} -H "Content-Type: application/json" -d '{"test": true}'`}
+                label="Copy"
+              />
+            </div>
+          </div>
 
-      <div className="mt-8">
-        <h2 className="text-lg font-semibold text-text-primary mb-4">Request Feed</h2>
-        <RequestFeed endpointId={endpoint.id} endpointUrl={webhookUrl} />
-      </div>
+          <div className="mt-8">
+            <h2 className="text-lg font-semibold text-text-primary mb-4">Request Feed</h2>
+            <RequestFeed endpointId={endpoint.id} endpointUrl={webhookUrl} />
+          </div>
+        </>
+      )}
     </div>
   )
 }
