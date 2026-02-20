@@ -12,6 +12,7 @@ describe('BillingClient', () => {
     render(
       <BillingClient
         plan="free"
+        status="active"
         hasStripeCustomer={false}
         requestCount={42}
         aiAnalysisCount={3}
@@ -32,6 +33,7 @@ describe('BillingClient', () => {
     render(
       <BillingClient
         plan="pro"
+        status="active"
         hasStripeCustomer={true}
         requestCount={500}
         aiAnalysisCount={25}
@@ -53,6 +55,7 @@ describe('BillingClient', () => {
     render(
       <BillingClient
         plan="pro"
+        status="active"
         hasStripeCustomer={true}
         requestCount={0}
         aiAnalysisCount={0}
@@ -69,6 +72,7 @@ describe('BillingClient', () => {
     render(
       <BillingClient
         plan="pro"
+        status="active"
         hasStripeCustomer={false}
         requestCount={0}
         aiAnalysisCount={0}
@@ -97,6 +101,7 @@ describe('BillingClient', () => {
     render(
       <BillingClient
         plan="free"
+        status="active"
         hasStripeCustomer={false}
         requestCount={0}
         aiAnalysisCount={0}
@@ -127,6 +132,7 @@ describe('BillingClient', () => {
     render(
       <BillingClient
         plan="pro"
+        status="active"
         hasStripeCustomer={true}
         requestCount={0}
         aiAnalysisCount={0}
@@ -139,5 +145,59 @@ describe('BillingClient', () => {
     await user.click(screen.getByRole('button', { name: 'Manage Subscription' }))
 
     expect(mockFetch).toHaveBeenCalledWith('/api/stripe/portal', { method: 'POST' })
+  })
+
+  it('shows past_due warning banner with Update Payment button when status is past_due', async () => {
+    const user = userEvent.setup()
+
+    const mockFetch = vi.fn().mockResolvedValue({
+      json: () => Promise.resolve({ url: 'https://billing.stripe.com/session' }),
+    })
+    vi.stubGlobal('fetch', mockFetch)
+
+    Object.defineProperty(window, 'location', {
+      value: { href: '' },
+      writable: true,
+    })
+
+    render(
+      <BillingClient
+        plan="pro"
+        status="past_due"
+        hasStripeCustomer={true}
+        requestCount={0}
+        aiAnalysisCount={0}
+        maxRequests={Infinity}
+        maxAnalyses={Infinity}
+        currentPeriodEnd="2026-03-15T00:00:00Z"
+      />
+    )
+
+    expect(screen.getByText('Payment failed')).toBeInTheDocument()
+    expect(
+      screen.getByText('Your payment failed. Pro features are suspended until payment is updated.')
+    ).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: 'Update Payment' }))
+
+    expect(mockFetch).toHaveBeenCalledWith('/api/stripe/portal', { method: 'POST' })
+  })
+
+  it('does not show past_due warning banner for active subscriptions', () => {
+    render(
+      <BillingClient
+        plan="pro"
+        status="active"
+        hasStripeCustomer={true}
+        requestCount={0}
+        aiAnalysisCount={0}
+        maxRequests={Infinity}
+        maxAnalyses={Infinity}
+        currentPeriodEnd="2026-03-15T00:00:00Z"
+      />
+    )
+
+    expect(screen.queryByText('Payment failed')).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Update Payment' })).not.toBeInTheDocument()
   })
 })

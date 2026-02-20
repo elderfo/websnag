@@ -1,3 +1,4 @@
+import { Suspense } from 'react'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
 import { getUserPlan } from '@/lib/usage'
@@ -6,6 +7,7 @@ import { StatCard } from '@/components/dashboard/stat-card'
 import { RecentActivity } from '@/components/dashboard/recent-activity'
 import { Badge } from '@/components/ui/badge'
 import { LIMITS } from '@/types'
+import { UpgradeBanner } from '@/components/dashboard/upgrade-banner'
 
 export default async function DashboardPage() {
   const supabase = await createClient()
@@ -64,6 +66,9 @@ export default async function DashboardPage() {
   if (endpoints.length === 0) {
     return (
       <div>
+        <Suspense fallback={null}>
+          <UpgradeBanner />
+        </Suspense>
         <h1 className="text-2xl font-bold text-text-primary">Dashboard</h1>
         {!hasUsername && (
           <div className="mt-4 rounded-lg border border-accent/30 bg-accent/5 px-4 py-3">
@@ -115,6 +120,9 @@ export default async function DashboardPage() {
 
   return (
     <div>
+      <Suspense fallback={null}>
+        <UpgradeBanner />
+      </Suspense>
       {!hasUsername && (
         <div className="mb-6 rounded-lg border border-accent/30 bg-accent/5 px-4 py-3">
           <p className="text-sm font-medium text-text-primary">Set your username to get started</p>

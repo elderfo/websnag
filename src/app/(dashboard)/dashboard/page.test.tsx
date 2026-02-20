@@ -176,6 +176,10 @@ vi.mock('@/components/ui/badge', () => ({
   ),
 }))
 
+vi.mock('@/components/dashboard/upgrade-banner', () => ({
+  UpgradeBanner: () => null,
+}))
+
 import DashboardPage from './page'
 
 describe('DashboardPage', () => {

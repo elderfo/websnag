@@ -69,6 +69,9 @@ export async function POST(req: Request) {
         ? new Date(firstItem.current_period_end * 1000).toISOString()
         : null
 
+      // TODO: persist cancel_at_period_end to the subscriptions table so the billing UI can
+      // distinguish "renewing" from "canceling at period end". Requires a migration to add a
+      // cancel_at_period_end BOOLEAN column to subscriptions before this value can be stored.
       // If canceled at period end, keep as 'pro' until period ends
       if (subscription.cancel_at_period_end) {
         await supabase
