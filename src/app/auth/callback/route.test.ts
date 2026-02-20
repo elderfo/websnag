@@ -34,7 +34,7 @@ describe('Auth callback route', () => {
     })
   })
 
-  it('redirects to /dashboard on successful code exchange', async () => {
+  it('redirects to /auth/redirect on successful code exchange', async () => {
     mockExchangeCodeForSession.mockResolvedValue({ error: null })
 
     const request = new Request('http://localhost:3000/auth/callback?code=test-code')
@@ -42,7 +42,17 @@ describe('Auth callback route', () => {
 
     expect(mockExchangeCodeForSession).toHaveBeenCalledWith('test-code')
     expect(response.status).toBe(307)
-    expect(response.headers.get('location')).toBe('http://localhost:3000/dashboard')
+    expect(response.headers.get('location')).toBe('http://localhost:3000/auth/redirect')
+  })
+
+  it('redirects to /auth/redirect instead of /dashboard after successful login', async () => {
+    mockExchangeCodeForSession.mockResolvedValue({ error: null })
+
+    const request = new Request('http://localhost:3000/auth/callback?code=test-code')
+    const response = await GET(request)
+
+    expect(response.status).toBe(307)
+    expect(response.headers.get('location')).toBe('http://localhost:3000/auth/redirect')
   })
 
   it('redirects to custom next path when provided', async () => {
