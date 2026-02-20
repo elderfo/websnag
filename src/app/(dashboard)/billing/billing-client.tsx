@@ -15,9 +15,7 @@ interface BillingClientProps {
   maxRequests: number
   maxAnalyses: number
   currentPeriodEnd: string | null
-  // TODO: add cancelAtPeriodEnd boolean once the subscriptions table has a cancel_at_period_end
-  // column. The Stripe webhook handler already reads this value from the Stripe API but does not
-  // persist it. A migration is required before this can be surfaced in the UI.
+  cancelAtPeriodEnd: boolean
 }
 
 function getProgressColor(percentage: number): string {
@@ -44,6 +42,7 @@ export function BillingClient({
   maxRequests,
   maxAnalyses,
   currentPeriodEnd,
+  cancelAtPeriodEnd,
 }: BillingClientProps) {
   const [loading, setLoading] = useState(false)
 
@@ -124,6 +123,46 @@ export function BillingClient({
         </div>
       )}
 
+      {/* Cancellation pending warning */}
+      {cancelAtPeriodEnd && isPro && status === 'active' && currentPeriodEnd && (
+        <div className="flex items-start justify-between rounded-lg border border-amber-500/30 bg-amber-500/10 px-4 py-3">
+          <div className="flex items-start gap-3">
+            <svg
+              className="mt-0.5 h-5 w-5 flex-shrink-0 text-amber-400"
+              fill="none"
+              viewBox="0 0 24 24"
+              strokeWidth={2}
+              stroke="currentColor"
+              aria-hidden="true"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z"
+              />
+            </svg>
+            <div>
+              <p className="text-sm font-medium text-amber-300">
+                Your Pro plan ends on {new Date(currentPeriodEnd).toLocaleDateString()}
+              </p>
+              <p className="mt-0.5 text-sm text-amber-400/80">
+                You&apos;ll lose access to unlimited endpoints, requests, and AI analyses when your
+                plan expires.
+              </p>
+            </div>
+          </div>
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={handleManage}
+            disabled={loading}
+            className="ml-4 flex-shrink-0 border-amber-500/20 text-amber-400 hover:bg-amber-500/10"
+          >
+            Re-subscribe
+          </Button>
+        </div>
+      )}
+
       {/* Plan info */}
       <Card>
         <div className="flex items-center justify-between">
@@ -134,7 +173,8 @@ export function BillingClient({
             </div>
             {isPro && currentPeriodEnd && (
               <p className="text-sm text-text-secondary">
-                Renews on {new Date(currentPeriodEnd).toLocaleDateString()}
+                {cancelAtPeriodEnd ? 'Ends on' : 'Renews on'}{' '}
+                {new Date(currentPeriodEnd).toLocaleDateString()}
               </p>
             )}
             {!isPro && (

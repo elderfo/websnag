@@ -19,6 +19,7 @@ describe('BillingClient', () => {
         maxRequests={100}
         maxAnalyses={5}
         currentPeriodEnd={null}
+        cancelAtPeriodEnd={false}
       />
     )
 
@@ -40,6 +41,7 @@ describe('BillingClient', () => {
         maxRequests={Infinity}
         maxAnalyses={Infinity}
         currentPeriodEnd="2026-03-15T00:00:00Z"
+        cancelAtPeriodEnd={false}
       />
     )
 
@@ -62,6 +64,7 @@ describe('BillingClient', () => {
         maxRequests={Infinity}
         maxAnalyses={Infinity}
         currentPeriodEnd="2026-03-15T00:00:00Z"
+        cancelAtPeriodEnd={false}
       />
     )
 
@@ -79,6 +82,7 @@ describe('BillingClient', () => {
         maxRequests={Infinity}
         maxAnalyses={Infinity}
         currentPeriodEnd={null}
+        cancelAtPeriodEnd={false}
       />
     )
 
@@ -108,6 +112,7 @@ describe('BillingClient', () => {
         maxRequests={100}
         maxAnalyses={5}
         currentPeriodEnd={null}
+        cancelAtPeriodEnd={false}
       />
     )
 
@@ -139,6 +144,7 @@ describe('BillingClient', () => {
         maxRequests={Infinity}
         maxAnalyses={Infinity}
         currentPeriodEnd="2026-03-15T00:00:00Z"
+        cancelAtPeriodEnd={false}
       />
     )
 
@@ -170,6 +176,7 @@ describe('BillingClient', () => {
         maxRequests={Infinity}
         maxAnalyses={Infinity}
         currentPeriodEnd="2026-03-15T00:00:00Z"
+        cancelAtPeriodEnd={false}
       />
     )
 
@@ -194,10 +201,100 @@ describe('BillingClient', () => {
         maxRequests={Infinity}
         maxAnalyses={Infinity}
         currentPeriodEnd="2026-03-15T00:00:00Z"
+        cancelAtPeriodEnd={false}
       />
     )
 
     expect(screen.queryByText('Payment failed')).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Update Payment' })).not.toBeInTheDocument()
+  })
+
+  it('shows cancellation warning banner when cancel_at_period_end is true', () => {
+    render(
+      <BillingClient
+        plan="pro"
+        status="active"
+        hasStripeCustomer={true}
+        requestCount={0}
+        aiAnalysisCount={0}
+        maxRequests={Infinity}
+        maxAnalyses={Infinity}
+        currentPeriodEnd="2026-03-15T00:00:00Z"
+        cancelAtPeriodEnd={true}
+      />
+    )
+
+    expect(screen.getByText(/Your Pro plan ends on/)).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /Re-subscribe/ })).toBeInTheDocument()
+    // Should show "Ends on" instead of "Renews on"
+    expect(screen.queryByText(/Renews on/)).not.toBeInTheDocument()
+    expect(screen.getByText(/Ends on/)).toBeInTheDocument()
+  })
+
+  it('does not show cancellation banner for free plan even with cancelAtPeriodEnd=true', () => {
+    render(
+      <BillingClient
+        plan="free"
+        status="active"
+        hasStripeCustomer={false}
+        requestCount={0}
+        aiAnalysisCount={0}
+        maxRequests={100}
+        maxAnalyses={5}
+        currentPeriodEnd="2026-03-15T00:00:00Z"
+        cancelAtPeriodEnd={true}
+      />
+    )
+
+    expect(screen.queryByText(/Your Pro plan ends on/)).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /Re-subscribe/ })).not.toBeInTheDocument()
+  })
+
+  it('does not show cancellation banner when cancelAtPeriodEnd is false', () => {
+    render(
+      <BillingClient
+        plan="pro"
+        status="active"
+        hasStripeCustomer={true}
+        requestCount={0}
+        aiAnalysisCount={0}
+        maxRequests={Infinity}
+        maxAnalyses={Infinity}
+        currentPeriodEnd="2026-03-15T00:00:00Z"
+        cancelAtPeriodEnd={false}
+      />
+    )
+
+    expect(screen.queryByText(/Your Pro plan ends on/)).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /Re-subscribe/ })).not.toBeInTheDocument()
+    expect(screen.getByText(/Renews on/)).toBeInTheDocument()
+  })
+
+  it('calls portal API when clicking Re-subscribe', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ url: '/portal' }),
+    } as Response)
+
+    vi.stubGlobal('fetch', fetchMock)
+
+    render(
+      <BillingClient
+        plan="pro"
+        status="active"
+        hasStripeCustomer={true}
+        requestCount={0}
+        aiAnalysisCount={0}
+        maxRequests={Infinity}
+        maxAnalyses={Infinity}
+        currentPeriodEnd="2026-03-15T00:00:00Z"
+        cancelAtPeriodEnd={true}
+      />
+    )
+
+    const user = userEvent.setup()
+    await user.click(screen.getByRole('button', { name: /Re-subscribe/ }))
+
+    expect(fetchMock).toHaveBeenCalledWith('/api/stripe/portal', { method: 'POST' })
   })
 })

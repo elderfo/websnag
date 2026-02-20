@@ -42,6 +42,7 @@ export default async function BillingPage() {
         maxRequests={limits.maxRequestsPerMonth}
         maxAnalyses={limits.maxAiAnalysesPerMonth}
         currentPeriodEnd={subResult.data?.current_period_end ?? null}
+        cancelAtPeriodEnd={subResult.data?.cancel_at_period_end ?? false}
       />
     </div>
   )
