@@ -2,10 +2,14 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
+import type { Plan } from '@/types'
 
 interface SidebarProps {
   requestCount?: number
   maxRequests?: number
+  aiAnalysisCount?: number
+  maxAiAnalyses?: number
+  plan?: Plan
 }
 
 const navItems = [
@@ -93,7 +97,13 @@ const navItems = [
   },
 ]
 
-export function Sidebar({ requestCount = 0, maxRequests = 100 }: SidebarProps) {
+export function Sidebar({
+  requestCount = 0,
+  maxRequests = 100,
+  aiAnalysisCount = 0,
+  maxAiAnalyses,
+  plan,
+}: SidebarProps) {
   const pathname = usePathname()
 
   return (
@@ -129,19 +139,76 @@ export function Sidebar({ requestCount = 0, maxRequests = 100 }: SidebarProps) {
 
       <div className="border-t border-border px-5 py-4">
         <p className="text-xs text-text-muted">Requests this month</p>
-        <p className="mt-1 font-mono text-sm text-text-secondary">
-          {requestCount}
-          {maxRequests !== Infinity && <span className="text-text-muted">/{maxRequests}</span>}
-        </p>
-        {maxRequests !== Infinity && (
+        <div className="mt-1 flex items-center gap-2">
+          <p className="font-mono text-sm text-text-secondary">
+            {requestCount}
+            {isFinite(maxRequests) && <span className="text-text-muted">/{maxRequests}</span>}
+          </p>
+          {isFinite(maxRequests) && requestCount >= maxRequests && (
+            <span className="h-2 w-2 rounded-full bg-red-500" title="Limit reached" />
+          )}
+          {isFinite(maxRequests) &&
+            requestCount >= maxRequests * 0.8 &&
+            requestCount < maxRequests && (
+              <span className="h-2 w-2 rounded-full bg-yellow-500" title="Approaching limit" />
+            )}
+        </div>
+        {isFinite(maxRequests) && (
           <div className="mt-2 h-1 w-full overflow-hidden rounded-full bg-border">
             <div
-              className="h-full rounded-full bg-accent transition-all"
+              className={`h-full rounded-full transition-all ${
+                requestCount >= maxRequests
+                  ? 'bg-red-500'
+                  : requestCount >= maxRequests * 0.8
+                    ? 'bg-yellow-500'
+                    : 'bg-accent'
+              }`}
               style={{
                 width: `${Math.min((requestCount / maxRequests) * 100, 100)}%`,
               }}
             />
           </div>
+        )}
+
+        {maxAiAnalyses !== undefined && isFinite(maxAiAnalyses) && (
+          <>
+            <p className="mt-3 text-xs text-text-muted">AI analyses this month</p>
+            <div className="mt-1 flex items-center gap-2">
+              <p className="font-mono text-sm text-text-secondary">
+                {aiAnalysisCount}
+                <span className="text-text-muted">/{maxAiAnalyses}</span>
+              </p>
+              {aiAnalysisCount >= maxAiAnalyses && (
+                <span className="h-2 w-2 rounded-full bg-red-500" title="Limit reached" />
+              )}
+              {aiAnalysisCount >= maxAiAnalyses * 0.8 && aiAnalysisCount < maxAiAnalyses && (
+                <span className="h-2 w-2 rounded-full bg-yellow-500" title="Approaching limit" />
+              )}
+            </div>
+            <div className="mt-2 h-1 w-full overflow-hidden rounded-full bg-border">
+              <div
+                className={`h-full rounded-full transition-all ${
+                  aiAnalysisCount >= maxAiAnalyses
+                    ? 'bg-red-500'
+                    : aiAnalysisCount >= maxAiAnalyses * 0.8
+                      ? 'bg-yellow-500'
+                      : 'bg-accent'
+                }`}
+                style={{
+                  width: `${Math.min((aiAnalysisCount / maxAiAnalyses) * 100, 100)}%`,
+                }}
+              />
+            </div>
+          </>
+        )}
+
+        {plan === 'free' && (
+          <Link
+            href="/billing"
+            className="mt-3 block text-xs text-accent transition-colors hover:text-accent-hover"
+          >
+            Upgrade to Pro
+          </Link>
         )}
       </div>
     </aside>

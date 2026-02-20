@@ -8,6 +8,7 @@ import { RecentActivity } from '@/components/dashboard/recent-activity'
 import { Badge } from '@/components/ui/badge'
 import { LIMITS } from '@/types'
 import { UpgradeBanner } from '@/components/dashboard/upgrade-banner'
+import { UsageWarningBanner } from '@/components/billing/usage-warning-banner'
 
 export default async function DashboardPage() {
   const supabase = await createClient()
@@ -61,6 +62,19 @@ export default async function DashboardPage() {
 
   const plan = getUserPlan(subscription)
   const requestCount = Array.isArray(usage) ? (usage[0]?.request_count ?? 0) : 0
+  const aiAnalysisCount = Array.isArray(usage) ? (usage[0]?.ai_analysis_count ?? 0) : 0
+
+  const usageBanner =
+    plan === 'free' ? (
+      <div className="mb-6">
+        <UsageWarningBanner
+          requestCount={requestCount}
+          maxRequests={LIMITS.free.maxRequestsPerMonth}
+          aiAnalysisCount={aiAnalysisCount}
+          maxAiAnalyses={LIMITS.free.maxAiAnalysesPerMonth}
+        />
+      </div>
+    ) : null
 
   // Empty state
   if (endpoints.length === 0) {
@@ -69,6 +83,7 @@ export default async function DashboardPage() {
         <Suspense fallback={null}>
           <UpgradeBanner />
         </Suspense>
+        {usageBanner}
         <h1 className="text-2xl font-bold text-text-primary">Dashboard</h1>
         {!hasUsername && (
           <div className="mt-4 rounded-lg border border-accent/30 bg-accent/5 px-4 py-3">
@@ -123,6 +138,7 @@ export default async function DashboardPage() {
       <Suspense fallback={null}>
         <UpgradeBanner />
       </Suspense>
+      {usageBanner}
       {!hasUsername && (
         <div className="mb-6 rounded-lg border border-accent/30 bg-accent/5 px-4 py-3">
           <p className="text-sm font-medium text-text-primary">Set your username to get started</p>

@@ -4,7 +4,7 @@ import { Sidebar } from '@/components/layout/sidebar'
 import { Header } from '@/components/layout/header'
 import { MobileNav } from '@/components/layout/mobile-nav'
 import { LIMITS } from '@/types'
-import type { Plan } from '@/types'
+import { getUserPlan } from '@/lib/usage'
 
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
   const supabase = await createClient()
@@ -20,11 +20,11 @@ export default async function DashboardLayout({ children }: { children: React.Re
   // Fetch subscription to determine plan
   const { data: subscription } = await supabase
     .from('subscriptions')
-    .select('plan')
+    .select('plan, status')
     .eq('user_id', user.id)
     .single()
 
-  const plan: Plan = (subscription?.plan as Plan) ?? 'free'
+  const plan = getUserPlan(subscription)
   const limits = LIMITS[plan]
 
   // Fetch current month usage
@@ -33,12 +33,19 @@ export default async function DashboardLayout({ children }: { children: React.Re
   })
 
   const requestCount = usageData?.[0]?.request_count ?? 0
+  const aiAnalysisCount = usageData?.[0]?.ai_analysis_count ?? 0
 
   return (
     <div className="min-h-screen bg-background">
       {/* Desktop sidebar — hidden on mobile */}
       <div className="hidden lg:block">
-        <Sidebar requestCount={requestCount} maxRequests={limits.maxRequestsPerMonth} />
+        <Sidebar
+          requestCount={requestCount}
+          maxRequests={limits.maxRequestsPerMonth}
+          aiAnalysisCount={aiAnalysisCount}
+          maxAiAnalyses={limits.maxAiAnalysesPerMonth}
+          plan={plan}
+        />
       </div>
 
       <div className="lg:pl-60">
@@ -46,7 +53,13 @@ export default async function DashboardLayout({ children }: { children: React.Re
           userEmail={user.email ?? ''}
           plan={plan}
           mobileNav={
-            <MobileNav requestCount={requestCount} maxRequests={limits.maxRequestsPerMonth} />
+            <MobileNav
+              requestCount={requestCount}
+              maxRequests={limits.maxRequestsPerMonth}
+              aiAnalysisCount={aiAnalysisCount}
+              maxAiAnalyses={limits.maxAiAnalysesPerMonth}
+              plan={plan}
+            />
           }
         />
         <main className="p-4 sm:p-6">{children}</main>

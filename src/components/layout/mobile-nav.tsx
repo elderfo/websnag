@@ -2,13 +2,23 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { Sidebar } from './sidebar'
+import type { Plan } from '@/types'
 
 interface MobileNavProps {
   requestCount?: number
   maxRequests?: number
+  aiAnalysisCount?: number
+  maxAiAnalyses?: number
+  plan?: Plan
 }
 
-export function MobileNav({ requestCount, maxRequests }: MobileNavProps) {
+export function MobileNav({
+  requestCount,
+  maxRequests,
+  aiAnalysisCount,
+  maxAiAnalyses,
+  plan,
+}: MobileNavProps) {
   const [isOpen, setIsOpen] = useState(false)
 
   const close = useCallback(() => setIsOpen(false), [])
@@ -81,7 +91,13 @@ export function MobileNav({ requestCount, maxRequests }: MobileNavProps) {
           }
         }}
       >
-        <Sidebar requestCount={requestCount} maxRequests={maxRequests} />
+        <Sidebar
+          requestCount={requestCount}
+          maxRequests={maxRequests}
+          aiAnalysisCount={aiAnalysisCount}
+          maxAiAnalyses={maxAiAnalyses}
+          plan={plan}
+        />
         <button
           onClick={close}
           className="absolute right-2 top-3 flex h-8 w-8 items-center justify-center rounded-md text-text-muted transition-colors hover:bg-white/5 hover:text-text-primary"
