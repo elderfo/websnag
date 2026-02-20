@@ -92,4 +92,14 @@ describe('Header', () => {
     fireEvent.keyDown(document, { key: 'Escape' })
     expect(screen.queryByText('Log out')).not.toBeInTheDocument()
   })
+
+  it('closes dropdown when clicking outside', () => {
+    render(<Header userEmail="user@example.com" plan="free" />)
+    const trigger = screen.getByRole('button', { expanded: false })
+    fireEvent.click(trigger)
+    expect(screen.getByText('Log out')).toBeInTheDocument()
+
+    fireEvent.mouseDown(document.body)
+    expect(screen.queryByText('Log out')).not.toBeInTheDocument()
+  })
 })
