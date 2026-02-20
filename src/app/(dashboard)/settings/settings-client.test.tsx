@@ -80,6 +80,8 @@ beforeEach(() => {
   vi.clearAllMocks()
   vi.useFakeTimers({ shouldAdvanceTime: true })
   global.fetch = mockFetchForUsername()
+  // scrollIntoView is not implemented in JSDOM
+  Element.prototype.scrollIntoView = vi.fn()
 })
 
 afterEach(() => {
@@ -317,6 +319,75 @@ describe('SettingsClient', () => {
         expect(
           screen.getByText('Could not verify availability. You can still try saving.')
         ).toBeInTheDocument()
+      })
+    })
+
+    it('redirects to redirectAfterSave when it is a relative path', async () => {
+      vi.useRealTimers()
+      global.fetch = mockFetchForUsername({
+        checkAvailable: true,
+        saveOk: true,
+        saveBody: { username: 'testuser' },
+      })
+      const user = userEvent.setup()
+      render(<SettingsClient {...defaultProps} isSetup redirectAfterSave="/endpoints/new" />)
+
+      await user.type(screen.getByPlaceholderText('your-username'), 'testuser')
+
+      await waitFor(() => {
+        expect(screen.getByText('Username is available')).toBeInTheDocument()
+      })
+
+      await user.click(screen.getByRole('button', { name: 'Set Username' }))
+
+      await waitFor(() => {
+        expect(mockPush).toHaveBeenCalledWith('/endpoints/new')
+      })
+    })
+
+    it('redirects to /dashboard when redirectAfterSave is an absolute URL (open redirect prevention)', async () => {
+      vi.useRealTimers()
+      global.fetch = mockFetchForUsername({
+        checkAvailable: true,
+        saveOk: true,
+        saveBody: { username: 'testuser' },
+      })
+      const user = userEvent.setup()
+      render(<SettingsClient {...defaultProps} isSetup redirectAfterSave="https://evil.com" />)
+
+      await user.type(screen.getByPlaceholderText('your-username'), 'testuser')
+
+      await waitFor(() => {
+        expect(screen.getByText('Username is available')).toBeInTheDocument()
+      })
+
+      await user.click(screen.getByRole('button', { name: 'Set Username' }))
+
+      await waitFor(() => {
+        expect(mockPush).toHaveBeenCalledWith('/dashboard')
+      })
+    })
+
+    it('redirects to /dashboard when redirectAfterSave is a protocol-relative URL', async () => {
+      vi.useRealTimers()
+      global.fetch = mockFetchForUsername({
+        checkAvailable: true,
+        saveOk: true,
+        saveBody: { username: 'testuser' },
+      })
+      const user = userEvent.setup()
+      render(<SettingsClient {...defaultProps} isSetup redirectAfterSave="//evil.com" />)
+
+      await user.type(screen.getByPlaceholderText('your-username'), 'testuser')
+
+      await waitFor(() => {
+        expect(screen.getByText('Username is available')).toBeInTheDocument()
+      })
+
+      await user.click(screen.getByRole('button', { name: 'Set Username' }))
+
+      await waitFor(() => {
+        expect(mockPush).toHaveBeenCalledWith('/dashboard')
       })
     })
   })

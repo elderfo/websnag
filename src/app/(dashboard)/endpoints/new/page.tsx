@@ -5,10 +5,13 @@ import { EndpointForm } from '@/components/endpoints/endpoint-form'
 
 export default async function NewEndpointPage() {
   const supabase = await createClient()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
 
   const [subscriptionResult, profileResult] = await Promise.all([
     supabase.from('subscriptions').select('plan, status').single(),
-    supabase.from('profiles').select('username').maybeSingle(),
+    supabase.from('profiles').select('username').eq('id', user!.id).maybeSingle(),
   ])
 
   const isPro = getUserPlan(subscriptionResult.data) === 'pro'

@@ -11,6 +11,10 @@ import type { Plan } from '@/types'
 
 const USERNAME_REGEX = /^[a-z0-9][a-z0-9-]{1,30}[a-z0-9]$/
 
+function isRelativePath(path: string): boolean {
+  return path.startsWith('/') && !path.startsWith('//')
+}
+
 interface SettingsClientProps {
   email: string
   createdAt: string
@@ -135,9 +139,9 @@ export function SettingsClient({
       setUsernameSuccess(true)
 
       // Redirect after save: go to the requested page, or dashboard if in setup flow
-      if (redirectAfterSave) {
+      if (redirectAfterSave && isRelativePath(redirectAfterSave)) {
         router.push(redirectAfterSave)
-      } else if (isSetup) {
+      } else if (redirectAfterSave || isSetup) {
         router.push('/dashboard')
       }
     } catch (err) {
