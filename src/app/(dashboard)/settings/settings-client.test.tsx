@@ -25,7 +25,7 @@ const defaultProps = {
   redirectAfterSave: null,
 }
 
-/** Mock fetch that routes availability checks and saves separately */
+/** Mock fetch that routes availability checks, username saves, and account deletion separately */
 function mockFetchForUsername(opts?: {
   checkAvailable?: boolean
   checkReason?: string
@@ -34,6 +34,9 @@ function mockFetchForUsername(opts?: {
   saveOk?: boolean
   saveBody?: Record<string, unknown>
   saveError?: boolean
+  deleteOk?: boolean
+  deleteBody?: Record<string, unknown>
+  deleteNetworkError?: boolean
 }) {
   const {
     checkAvailable = true,
@@ -43,6 +46,9 @@ function mockFetchForUsername(opts?: {
     saveOk = true,
     saveBody = { username: 'testuser' },
     saveError = false,
+    deleteOk = true,
+    deleteBody = { success: true },
+    deleteNetworkError = false,
   } = opts ?? {}
 
   return vi.fn().mockImplementation((url: string) => {
@@ -65,6 +71,17 @@ function mockFetchForUsername(opts?: {
             : { available: false, reason: checkReason ?? 'Username is already taken' },
       } as Response)
     }
+
+    if (typeof url === 'string' && url.includes('/api/account/delete')) {
+      if (deleteNetworkError) {
+        return Promise.reject(new Error('Network error'))
+      }
+      return Promise.resolve({
+        ok: deleteOk,
+        json: async () => deleteBody,
+      } as Response)
+    }
+
     // All other requests (save endpoint)
     if (saveError) {
       return Promise.reject(new Error('Network error'))
@@ -128,10 +145,146 @@ describe('SettingsClient', () => {
     expect(mockPush).toHaveBeenCalledWith('/login')
   })
 
-  it('shows danger zone with support contact', () => {
+  it('shows danger zone with delete account button', () => {
     render(<SettingsClient {...defaultProps} />)
     expect(screen.getByText('Danger Zone')).toBeInTheDocument()
-    expect(screen.getByText('support@websnag.dev')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Delete Account' })).toBeInTheDocument()
+  })
+
+  describe('account deletion', () => {
+    it('shows confirmation section when delete account is clicked', async () => {
+      vi.useRealTimers()
+      const user = userEvent.setup()
+      render(<SettingsClient {...defaultProps} />)
+
+      await user.click(screen.getByRole('button', { name: 'Delete Account' }))
+
+      expect(screen.getByPlaceholderText('delete my account')).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: 'Permanently Delete Account' })).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: 'Cancel' })).toBeInTheDocument()
+    })
+
+    it('keeps confirm button disabled until phrase is typed exactly', async () => {
+      vi.useRealTimers()
+      const user = userEvent.setup()
+      render(<SettingsClient {...defaultProps} />)
+
+      await user.click(screen.getByRole('button', { name: 'Delete Account' }))
+
+      const confirmButton = screen.getByRole('button', { name: 'Permanently Delete Account' })
+      expect(confirmButton).toBeDisabled()
+
+      await user.type(screen.getByPlaceholderText('delete my account'), 'delete my accoun')
+      expect(confirmButton).toBeDisabled()
+
+      await user.type(screen.getByPlaceholderText('delete my account'), 't')
+      expect(confirmButton).not.toBeDisabled()
+    })
+
+    it('collapses back to initial state when cancel is clicked', async () => {
+      vi.useRealTimers()
+      const user = userEvent.setup()
+      render(<SettingsClient {...defaultProps} />)
+
+      await user.click(screen.getByRole('button', { name: 'Delete Account' }))
+      expect(screen.getByPlaceholderText('delete my account')).toBeInTheDocument()
+
+      await user.click(screen.getByRole('button', { name: 'Cancel' }))
+
+      expect(screen.queryByPlaceholderText('delete my account')).not.toBeInTheDocument()
+      expect(screen.getByRole('button', { name: 'Delete Account' })).toBeInTheDocument()
+    })
+
+    it('shows pro subscription cancellation notice when plan is pro', async () => {
+      vi.useRealTimers()
+      const user = userEvent.setup()
+      render(<SettingsClient {...defaultProps} plan="pro" />)
+
+      await user.click(screen.getByRole('button', { name: 'Delete Account' }))
+
+      expect(screen.getByText('Your Pro subscription will be canceled')).toBeInTheDocument()
+    })
+
+    it('does not show pro subscription notice for free plan', async () => {
+      vi.useRealTimers()
+      const user = userEvent.setup()
+      render(<SettingsClient {...defaultProps} plan="free" />)
+
+      await user.click(screen.getByRole('button', { name: 'Delete Account' }))
+
+      expect(screen.queryByText('Your Pro subscription will be canceled')).not.toBeInTheDocument()
+    })
+
+    it('calls delete endpoint, signs out, and redirects to / on success', async () => {
+      vi.useRealTimers()
+      global.fetch = mockFetchForUsername({ deleteOk: true, deleteBody: { success: true } })
+      mockSignOut.mockResolvedValue({})
+      const user = userEvent.setup()
+      render(<SettingsClient {...defaultProps} />)
+
+      await user.click(screen.getByRole('button', { name: 'Delete Account' }))
+      await user.type(screen.getByPlaceholderText('delete my account'), 'delete my account')
+      await user.click(screen.getByRole('button', { name: 'Permanently Delete Account' }))
+
+      await waitFor(() => {
+        expect(mockSignOut).toHaveBeenCalled()
+        expect(mockPush).toHaveBeenCalledWith('/')
+      })
+    })
+
+    it('shows error message when API returns an error', async () => {
+      vi.useRealTimers()
+      global.fetch = mockFetchForUsername({
+        deleteOk: false,
+        deleteBody: { error: 'Failed to delete account' },
+      })
+      const user = userEvent.setup()
+      render(<SettingsClient {...defaultProps} />)
+
+      await user.click(screen.getByRole('button', { name: 'Delete Account' }))
+      await user.type(screen.getByPlaceholderText('delete my account'), 'delete my account')
+      await user.click(screen.getByRole('button', { name: 'Permanently Delete Account' }))
+
+      await waitFor(() => {
+        expect(screen.getByText('Failed to delete account')).toBeInTheDocument()
+      })
+    })
+
+    it('shows error on network failure during deletion', async () => {
+      vi.useRealTimers()
+      global.fetch = mockFetchForUsername({ deleteNetworkError: true })
+      const user = userEvent.setup()
+      render(<SettingsClient {...defaultProps} />)
+
+      await user.click(screen.getByRole('button', { name: 'Delete Account' }))
+      await user.type(screen.getByPlaceholderText('delete my account'), 'delete my account')
+      await user.click(screen.getByRole('button', { name: 'Permanently Delete Account' }))
+
+      await waitFor(() => {
+        expect(screen.getByText('Failed to delete account. Please try again.')).toBeInTheDocument()
+      })
+    })
+
+    it('clears error when user edits the confirmation input', async () => {
+      vi.useRealTimers()
+      global.fetch = mockFetchForUsername({
+        deleteOk: false,
+        deleteBody: { error: 'Failed to delete account' },
+      })
+      const user = userEvent.setup()
+      render(<SettingsClient {...defaultProps} />)
+
+      await user.click(screen.getByRole('button', { name: 'Delete Account' }))
+      await user.type(screen.getByPlaceholderText('delete my account'), 'delete my account')
+      await user.click(screen.getByRole('button', { name: 'Permanently Delete Account' }))
+
+      await waitFor(() => {
+        expect(screen.getByText('Failed to delete account')).toBeInTheDocument()
+      })
+
+      await user.type(screen.getByPlaceholderText('delete my account'), ' ')
+      expect(screen.queryByText('Failed to delete account')).not.toBeInTheDocument()
+    })
   })
 
   describe('username', () => {

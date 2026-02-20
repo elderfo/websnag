@@ -42,6 +42,10 @@ export function SettingsClient({
   const [usernameSuccess, setUsernameSuccess] = useState(false)
   const checkAbortRef = useRef<AbortController | null>(null)
   const usernameCardRef = useRef<HTMLDivElement | null>(null)
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
+  const [deleteInput, setDeleteInput] = useState('')
+  const [isDeleting, setIsDeleting] = useState(false)
+  const [deleteError, setDeleteError] = useState('')
 
   // When arriving via the setup flow, scroll the username card into view
   useEffect(() => {
@@ -54,6 +58,30 @@ export function SettingsClient({
     const supabase = createClient()
     await supabase.auth.signOut()
     router.push('/login')
+  }
+
+  async function handleDeleteAccount() {
+    setDeleteError('')
+    setIsDeleting(true)
+
+    try {
+      const res = await fetch('/api/account/delete', { method: 'POST' })
+      const data = await res.json()
+
+      if (!res.ok) {
+        setDeleteError(data.error ?? 'Failed to delete account')
+        return
+      }
+
+      const supabase = createClient()
+      await supabase.auth.signOut()
+      router.push('/')
+    } catch (err) {
+      console.error('[settings] failed to delete account:', err)
+      setDeleteError('Failed to delete account. Please try again.')
+    } finally {
+      setIsDeleting(false)
+    }
   }
 
   // Debounced availability check
@@ -284,13 +312,73 @@ export function SettingsClient({
       {/* Danger zone */}
       <Card className="border-red-500/20">
         <h2 className="mb-2 text-base font-medium text-red-400">Danger Zone</h2>
-        <p className="text-sm text-text-secondary">
-          To delete your account and all associated data, please contact support at{' '}
-          <a href="mailto:support@websnag.dev" className="text-accent hover:underline">
-            support@websnag.dev
-          </a>
-          .
-        </p>
+
+        {!showDeleteConfirm ? (
+          <div className="flex items-start justify-between gap-4">
+            <p className="text-sm text-text-secondary">
+              Permanently delete your account and all associated data. This action cannot be undone.
+            </p>
+            <Button variant="destructive" size="sm" onClick={() => setShowDeleteConfirm(true)}>
+              Delete Account
+            </Button>
+          </div>
+        ) : (
+          <div className="space-y-4">
+            <div className="rounded-md border border-red-500/20 bg-red-500/5 px-4 py-3">
+              <p className="text-sm text-red-400">
+                This will permanently delete your account and all data including:
+              </p>
+              <ul className="mt-2 list-inside list-disc space-y-1 text-sm text-text-secondary">
+                <li>All webhook endpoints</li>
+                <li>All captured requests and AI analyses</li>
+                <li>Usage history</li>
+                {plan === 'pro' && <li>Your Pro subscription will be canceled</li>}
+              </ul>
+            </div>
+
+            <div>
+              <label htmlFor="delete-confirm" className="block text-sm text-text-secondary">
+                Type{' '}
+                <span className="font-mono font-medium text-text-primary">delete my account</span>{' '}
+                to confirm
+              </label>
+              <Input
+                id="delete-confirm"
+                value={deleteInput}
+                onChange={(e) => {
+                  setDeleteInput(e.target.value)
+                  setDeleteError('')
+                }}
+                placeholder="delete my account"
+                className="mt-2"
+                error={deleteError}
+              />
+            </div>
+
+            <div className="flex items-center gap-3">
+              <Button
+                variant="destructive"
+                size="sm"
+                disabled={deleteInput !== 'delete my account' || isDeleting}
+                onClick={handleDeleteAccount}
+              >
+                {isDeleting ? 'Deleting...' : 'Permanently Delete Account'}
+              </Button>
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() => {
+                  setShowDeleteConfirm(false)
+                  setDeleteInput('')
+                  setDeleteError('')
+                }}
+                disabled={isDeleting}
+              >
+                Cancel
+              </Button>
+            </div>
+          </div>
+        )}
       </Card>
     </div>
   )
