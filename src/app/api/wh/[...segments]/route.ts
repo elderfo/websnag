@@ -1,4 +1,5 @@
 import { createAdminClient } from '@/lib/supabase/admin'
+import { createRequestLogger } from '@/lib/logger'
 import { checkSlugRateLimit, checkIpRateLimit, RateLimitResult } from '@/lib/rate-limit'
 import { getUserPlan, canReceiveRequest } from '@/lib/usage'
 import { NextRequest, NextResponse } from 'next/server'
@@ -77,6 +78,7 @@ async function readBodyWithLimit(req: NextRequest, maxBytes: number): Promise<Bo
 // ─────────────────────────────────────────────────────────────────────────────
 
 async function handleLegacyRedirect(req: NextRequest, slug: string): Promise<NextResponse> {
+  const log = createRequestLogger('webhook-legacy')
   const supabase = createAdminClient()
 
   // Look up all endpoints with this slug (after migration, multiple users can share a slug)
@@ -87,7 +89,7 @@ async function handleLegacyRedirect(req: NextRequest, slug: string): Promise<Nex
     .limit(2)
 
   if (endpointError) {
-    console.error('[webhook] legacy redirect endpoint lookup error:', endpointError)
+    log.error({ err: endpointError, slug }, 'endpoint lookup failed')
   }
 
   if (!endpoints || endpoints.length === 0) {
@@ -114,7 +116,7 @@ async function handleLegacyRedirect(req: NextRequest, slug: string): Promise<Nex
     .single()
 
   if (profileError) {
-    console.error('[webhook] legacy redirect profile lookup error:', profileError)
+    log.error({ err: profileError, slug }, 'profile lookup failed')
   }
 
   if (!profile?.username) {
@@ -137,6 +139,7 @@ async function handleWebhookCapture(
   username: string,
   slug: string
 ): Promise<NextResponse> {
+  const log = createRequestLogger('webhook')
   const sourceIp = getSourceIp(req)
 
   // 1. Rate limiting checks — BEFORE any database queries
@@ -182,7 +185,7 @@ async function handleWebhookCapture(
     }
   } catch (error) {
     // Fail open: if rate limiting itself throws, allow the request
-    console.error('[webhook] Rate limiting check failed, allowing request:', error)
+    log.error({ err: error }, 'rate limiting check failed, allowing request')
   }
 
   const supabase = createAdminClient()
@@ -195,7 +198,7 @@ async function handleWebhookCapture(
     .single()
 
   if (profileError && profileError.code !== 'PGRST116') {
-    console.error('[webhook] profile lookup error:', profileError)
+    log.error({ err: profileError, username }, 'profile lookup failed')
   }
 
   if (!profile) {
@@ -213,7 +216,7 @@ async function handleWebhookCapture(
     .single()
 
   if (endpointError && endpointError.code !== 'PGRST116') {
-    console.error('[webhook] endpoint lookup error:', endpointError)
+    log.error({ err: endpointError, username, slug }, 'endpoint lookup failed')
   }
 
   if (endpointError || !endpoint) {
@@ -278,7 +281,7 @@ async function handleWebhookCapture(
   })
 
   if (insertError) {
-    console.error('[webhook] request insert error:', insertError)
+    log.error({ err: insertError, endpointId: endpoint.id }, 'request insert failed')
   }
 
   // 7. Increment usage counter
@@ -287,7 +290,7 @@ async function handleWebhookCapture(
   })
 
   if (rpcError) {
-    console.error('[webhook] increment_request_count error:', rpcError)
+    log.error({ err: rpcError, userId: endpoint.user_id }, 'increment_request_count failed')
   }
 
   // 8. Return configured response
@@ -332,7 +335,8 @@ export async function handleWebhook(
 
     return NextResponse.json({ error: 'Not found' }, { status: 404 })
   } catch (err) {
-    console.error('[webhook] unhandled error:', err)
+    const log = createRequestLogger('webhook')
+    log.error({ err }, 'unhandled error')
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }

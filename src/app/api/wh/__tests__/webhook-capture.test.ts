@@ -14,6 +14,17 @@ vi.mock('@/lib/supabase/admin', () => ({
   createAdminClient: () => mockSupabase,
 }))
 
+// Mock the logger module
+vi.mock('@/lib/logger', () => ({
+  createRequestLogger: () => ({
+    info: vi.fn(),
+    error: vi.fn(),
+    warn: vi.fn(),
+    debug: vi.fn(),
+    requestId: 'test-request-id',
+  }),
+}))
+
 // Mock the rate limit module
 const mockCheckSlugRateLimit = vi.fn()
 const mockCheckIpRateLimit = vi.fn()
