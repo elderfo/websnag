@@ -766,6 +766,123 @@ describe('handleWebhook (namespaced route /wh/[username]/[slug])', () => {
 })
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Slug enumeration hardening (#10)
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('slug enumeration hardening (#10)', () => {
+  let profileChain: ReturnType<typeof setupProfileQuery>
+  let endpointChain: ReturnType<typeof setupEndpointQuery>
+  let subscriptionChain: ReturnType<typeof setupSubscriptionQuery>
+
+  const params = Promise.resolve({ segments: ['johndoe', 'test-slug'] })
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+
+    profileChain = setupProfileQuery(mockProfile)
+    endpointChain = setupEndpointQuery(mockEndpoint)
+    subscriptionChain = setupSubscriptionQuery({ plan: 'free', status: 'active' })
+
+    mockFrom.mockImplementation((table: string) => {
+      if (table === 'profiles') return profileChain
+      if (table === 'endpoints') return endpointChain
+      if (table === 'subscriptions') return subscriptionChain
+      return {}
+    })
+
+    mockRpc.mockImplementation((fn: string) => {
+      if (fn === 'get_current_usage') {
+        return Promise.resolve({ data: [{ request_count: 5, ai_analysis_count: 0 }] })
+      }
+      return Promise.resolve({ data: null, error: null })
+    })
+
+    // Disable rate limit headers so comparison is clean
+    mockCheckSlugRateLimit.mockResolvedValue(null)
+    mockCheckIpRateLimit.mockResolvedValue(null)
+  })
+
+  async function capture404Response(
+    scenario: 'profile-not-found' | 'endpoint-not-found' | 'endpoint-inactive' | 'over-quota'
+  ): Promise<{ status: number; body: string; headerKeys: string[] }> {
+    switch (scenario) {
+      case 'profile-not-found': {
+        const chain = setupProfileQuery(null, { code: 'PGRST116' })
+        mockFrom.mockImplementation((table: string) => {
+          if (table === 'profiles') return chain
+          return {}
+        })
+        break
+      }
+      case 'endpoint-not-found': {
+        const chain = setupEndpointQuery(null, { code: 'PGRST116' })
+        mockFrom.mockImplementation((table: string) => {
+          if (table === 'profiles') return profileChain
+          if (table === 'endpoints') return chain
+          return {}
+        })
+        break
+      }
+      case 'endpoint-inactive': {
+        const chain = setupEndpointQuery({ ...mockEndpoint, is_active: false })
+        mockFrom.mockImplementation((table: string) => {
+          if (table === 'profiles') return profileChain
+          if (table === 'endpoints') return chain
+          return {}
+        })
+        break
+      }
+      case 'over-quota': {
+        mockRpc.mockImplementation((fn: string) => {
+          if (fn === 'get_current_usage') {
+            return Promise.resolve({ data: [{ request_count: 100, ai_analysis_count: 0 }] })
+          }
+          return Promise.resolve({ data: null, error: null })
+        })
+        break
+      }
+    }
+
+    const req = createRequest('POST', { body: '{}' })
+    const res = await handleWebhook(req, { params })
+    const body = await res.text()
+    const headerKeys = [...res.headers.keys()].sort()
+
+    return { status: res.status, body, headerKeys }
+  }
+
+  it('returns byte-identical response bodies for all 404 scenarios', async () => {
+    const profileNotFound = await capture404Response('profile-not-found')
+    const endpointNotFound = await capture404Response('endpoint-not-found')
+    const endpointInactive = await capture404Response('endpoint-inactive')
+    const overQuota = await capture404Response('over-quota')
+
+    // All must be 404
+    expect(profileNotFound.status).toBe(404)
+    expect(endpointNotFound.status).toBe(404)
+    expect(endpointInactive.status).toBe(404)
+    expect(overQuota.status).toBe(404)
+
+    // All response bodies must be byte-identical
+    expect(endpointNotFound.body).toBe(profileNotFound.body)
+    expect(endpointInactive.body).toBe(profileNotFound.body)
+    expect(overQuota.body).toBe(profileNotFound.body)
+  })
+
+  it('returns identical header key sets for all 404 scenarios', async () => {
+    const profileNotFound = await capture404Response('profile-not-found')
+    const endpointNotFound = await capture404Response('endpoint-not-found')
+    const endpointInactive = await capture404Response('endpoint-inactive')
+    const overQuota = await capture404Response('over-quota')
+
+    // All header key sets must be identical
+    expect(endpointNotFound.headerKeys).toEqual(profileNotFound.headerKeys)
+    expect(endpointInactive.headerKeys).toEqual(profileNotFound.headerKeys)
+    expect(overQuota.headerKeys).toEqual(profileNotFound.headerKeys)
+  })
+})
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Constant exposed for test use
 // ─────────────────────────────────────────────────────────────────────────────
 const MAX_BODY_SIZE = 1_048_576
