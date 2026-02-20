@@ -95,3 +95,17 @@ export const LIMITS: Record<Plan, TierLimits> = {
     customSlugs: true,
   },
 }
+
+// Request filter and pagination types
+
+export interface RequestFilters {
+  method?: string
+  search?: string
+  dateFrom?: string
+  dateTo?: string
+}
+
+export interface PaginatedRequests {
+  requests: WebhookRequest[]
+  hasMore: boolean
+}

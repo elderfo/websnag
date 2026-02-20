@@ -15,9 +15,10 @@ type Tab = 'body' | 'headers' | 'query' | 'analysis' | 'replay'
 interface RequestDetailProps {
   request: WebhookRequest
   endpointUrl: string
+  onDelete?: (id: string) => void
 }
 
-export function RequestDetail({ request: initialRequest, endpointUrl }: RequestDetailProps) {
+export function RequestDetail({ request: initialRequest, endpointUrl, onDelete }: RequestDetailProps) {
   const [request, setRequest] = useState(initialRequest)
   const [activeTab, setActiveTab] = useState<Tab>('body')
 
@@ -44,6 +45,16 @@ export function RequestDetail({ request: initialRequest, endpointUrl }: RequestD
         <span className="text-sm text-text-muted">{timeAgo(request.received_at)}</span>
         {request.source_ip && (
           <span className="text-xs text-text-muted ml-auto">from {request.source_ip}</span>
+        )}
+        {onDelete && (
+          <button
+            type="button"
+            onClick={() => onDelete(request.id)}
+            className="ml-2 text-xs text-red-400 hover:text-red-300 transition-colors"
+            title="Delete request"
+          >
+            Delete
+          </button>
         )}
       </div>
 

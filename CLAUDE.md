@@ -69,6 +69,10 @@ websnag/
 │   │       │   ├── route.ts          # Health check endpoint (DB connectivity)
 │   │       │   └── retention/
 │   │       │       └── route.ts      # Retention job health check + Resend alerting
+│   │       ├── requests/
+│   │       │   ├── [id]/route.ts        # Single request delete
+│   │       │   ├── bulk-delete/route.ts  # Bulk request delete
+│   │       │   └── export/route.ts       # Request export (JSON download)
 │   │       ├── admin/
 │   │       │   └── retention/route.ts # Manual retention cleanup trigger
 │   │       └── stripe/
@@ -76,9 +80,12 @@ websnag/
 │   │           └── webhook/route.ts   # Stripe webhook handler
 │   ├── components/
 │   │   ├── ui/                  # Reusable UI primitives (button, input, card, badge, etc.)
+│   │   │   ├── confirm-dialog.tsx   # Generic confirmation modal
 │   │   ├── layout/              # Header, Sidebar, Nav
 │   │   ├── endpoints/           # Endpoint-specific components
 │   │   ├── requests/            # Request feed, detail view, filters
+│   │   │   ├── filter-bar.tsx       # Method, date, search filters
+│   │   │   ├── bulk-actions.tsx     # Bulk select, delete, export bar
 │   │   ├── analysis/            # AI analysis display, code snippets
 │   │   └── billing/             # Upgrade prompts, usage display
 │   ├── lib/
