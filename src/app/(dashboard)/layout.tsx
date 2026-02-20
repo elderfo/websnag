@@ -4,7 +4,7 @@ import { Sidebar } from '@/components/layout/sidebar'
 import { Header } from '@/components/layout/header'
 import { MobileNav } from '@/components/layout/mobile-nav'
 import { LIMITS } from '@/types'
-import type { Plan } from '@/types'
+import { getUserPlan } from '@/lib/usage'
 
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
   const supabase = await createClient()
@@ -20,11 +20,11 @@ export default async function DashboardLayout({ children }: { children: React.Re
   // Fetch subscription to determine plan
   const { data: subscription } = await supabase
     .from('subscriptions')
-    .select('plan')
+    .select('plan, status')
     .eq('user_id', user.id)
     .single()
 
-  const plan: Plan = (subscription?.plan as Plan) ?? 'free'
+  const plan = getUserPlan(subscription)
   const limits = LIMITS[plan]
 
   // Fetch current month usage

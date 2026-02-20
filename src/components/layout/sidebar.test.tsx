@@ -51,4 +51,55 @@ describe('Sidebar', () => {
     const usageSection = container.querySelector('.border-t')
     expect(usageSection?.textContent).not.toMatch(/\/\d+/)
   })
+
+  it('shows yellow dot at 80% request usage', () => {
+    const { container } = render(<Sidebar requestCount={80} maxRequests={100} />)
+    const dot = container.querySelector('[title="Approaching limit"]')
+    expect(dot).toBeInTheDocument()
+    expect(dot?.className).toContain('bg-yellow-500')
+  })
+
+  it('shows red dot at 100% request usage', () => {
+    const { container } = render(<Sidebar requestCount={100} maxRequests={100} />)
+    const dot = container.querySelector('[title="Limit reached"]')
+    expect(dot).toBeInTheDocument()
+    expect(dot?.className).toContain('bg-red-500')
+  })
+
+  it('shows yellow dot at 80% AI analysis usage', () => {
+    const { container } = render(<Sidebar aiAnalysisCount={4} maxAiAnalyses={5} />)
+    const dots = container.querySelectorAll('[title="Approaching limit"]')
+    const aiDot = dots[dots.length - 1]
+    expect(aiDot).toBeTruthy()
+    expect(aiDot?.className).toContain('bg-yellow-500')
+  })
+
+  it('shows red dot at 100% AI analysis usage', () => {
+    const { container } = render(<Sidebar aiAnalysisCount={5} maxAiAnalyses={5} />)
+    const dots = container.querySelectorAll('[title="Limit reached"]')
+    const aiDot = dots[dots.length - 1]
+    expect(aiDot).toBeTruthy()
+    expect(aiDot?.className).toContain('bg-red-500')
+  })
+
+  it('uses yellow progress bar color at 80% request usage', () => {
+    const { container } = render(<Sidebar requestCount={80} maxRequests={100} />)
+    const progressBars = container.querySelectorAll('.bg-border .rounded-full')
+    const requestBar = progressBars[0]
+    expect(requestBar?.className).toContain('bg-yellow-500')
+  })
+
+  it('uses red progress bar color at 100% request usage', () => {
+    const { container } = render(<Sidebar requestCount={100} maxRequests={100} />)
+    const progressBars = container.querySelectorAll('.bg-border .rounded-full')
+    const requestBar = progressBars[0]
+    expect(requestBar?.className).toContain('bg-red-500')
+  })
+
+  it('uses accent progress bar color below 80% request usage', () => {
+    const { container } = render(<Sidebar requestCount={50} maxRequests={100} />)
+    const progressBars = container.querySelectorAll('.bg-border .rounded-full')
+    const requestBar = progressBars[0]
+    expect(requestBar?.className).toContain('bg-accent')
+  })
 })
