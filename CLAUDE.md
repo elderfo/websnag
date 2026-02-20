@@ -41,7 +41,8 @@ websnag/
 │       ├── 003_usage_functions.sql
 │       ├── 004_profiles_and_usernames.sql
 │       ├── 005_data_retention.sql   # Retention cleanup function + pg_cron schedule
-│       └── 006_retention_alerting.sql  # RPC function to query pg_cron job run history
+│       ├── 006_retention_alerting.sql  # RPC function to query pg_cron job run history
+│       └── 007_cancel_at_period_end.sql  # Boolean column for pending cancellation tracking
 ├── src/
 │   ├── app/
 │   │   ├── layout.tsx           # Root layout with providers
