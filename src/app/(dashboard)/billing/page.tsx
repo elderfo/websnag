@@ -35,6 +35,7 @@ export default async function BillingPage() {
 
       <BillingClient
         plan={plan}
+        status={subResult.data?.status ?? 'active'}
         hasStripeCustomer={hasStripeCustomer}
         requestCount={requestCount}
         aiAnalysisCount={aiAnalysisCount}

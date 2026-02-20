@@ -1,3 +1,4 @@
+import { Suspense } from 'react'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
 import { getUserPlan } from '@/lib/usage'
@@ -6,6 +7,7 @@ import { StatCard } from '@/components/dashboard/stat-card'
 import { RecentActivity } from '@/components/dashboard/recent-activity'
 import { Badge } from '@/components/ui/badge'
 import { LIMITS } from '@/types'
+import { UpgradeBanner } from '@/components/dashboard/upgrade-banner'
 
 export default async function DashboardPage() {
   const supabase = await createClient()
@@ -56,6 +58,9 @@ export default async function DashboardPage() {
   if (endpoints.length === 0) {
     return (
       <div>
+        <Suspense fallback={null}>
+          <UpgradeBanner />
+        </Suspense>
         <h1 className="text-2xl font-bold text-text-primary">Dashboard</h1>
         <div className="mt-12 rounded-lg border border-dashed border-border p-12 text-center">
           <p className="text-lg font-medium text-text-primary">Welcome to Websnag</p>
@@ -88,6 +93,9 @@ export default async function DashboardPage() {
 
   return (
     <div>
+      <Suspense fallback={null}>
+        <UpgradeBanner />
+      </Suspense>
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold text-text-primary">Dashboard</h1>
         <RefreshButton />
