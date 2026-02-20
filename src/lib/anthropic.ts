@@ -68,5 +68,5 @@ export function parseAnalysisResponse(text: string): AiAnalysis {
     .replace(/```\n?/g, '')
     .trim()
   const parsed: unknown = JSON.parse(cleaned)
-  return aiAnalysisSchema.parse(parsed) as AiAnalysis
+  return aiAnalysisSchema.parse(parsed)
 }

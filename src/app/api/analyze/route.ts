@@ -4,6 +4,7 @@ import { analyzeWebhook } from '@/lib/anthropic'
 import { analyzeRequestSchema } from '@/lib/validators'
 import { canAnalyze, getUserPlan } from '@/lib/usage'
 import { NextResponse } from 'next/server'
+import { APIError } from '@anthropic-ai/sdk'
 import type { AiAnalysis } from '@/types'
 
 export async function POST(req: Request) {
@@ -64,6 +65,10 @@ export async function POST(req: Request) {
         webhookRequest.content_type
       )
     } catch (error) {
+      if (error instanceof APIError) {
+        console.error('Anthropic API error:', error)
+        return NextResponse.json({ error: 'AI service unavailable' }, { status: 502 })
+      }
       console.error('AI analysis response validation failed:', error)
       return NextResponse.json(
         { error: 'AI analysis produced an invalid response' },
