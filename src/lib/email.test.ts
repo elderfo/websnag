@@ -23,6 +23,7 @@ describe('sendWelcomeEmail', () => {
   afterEach(() => {
     process.env = originalEnv
     vi.restoreAllMocks()
+    vi.unstubAllGlobals()
   })
 
   it('logs email content when RESEND_API_KEY is not configured', async () => {
