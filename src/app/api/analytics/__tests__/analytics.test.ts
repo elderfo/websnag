@@ -2,14 +2,14 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import type { AnalyticsResponse } from '../route'
 
 const mockGetUser = vi.fn()
-const mockFrom = vi.fn()
+const mockRpc = vi.fn()
 
 vi.mock('@/lib/supabase/server', () => ({
   createClient: vi.fn().mockResolvedValue({
     auth: {
       getUser: () => mockGetUser(),
     },
-    from: (...args: unknown[]) => mockFrom(...args),
+    rpc: (...args: unknown[]) => mockRpc(...args),
   }),
 }))
 
@@ -30,32 +30,6 @@ function createRequest(params: Record<string, string> = {}): Request {
     url.searchParams.set(key, value)
   }
   return new Request(url.toString())
-}
-
-function mockEndpoints(endpoints: Array<{ id: string; name: string; slug: string }>) {
-  return {
-    select: () => ({
-      data: endpoints,
-      error: null,
-    }),
-  }
-}
-
-function mockRequests(rows: Array<Record<string, unknown>>) {
-  return {
-    select: () => ({
-      in: () => ({
-        gte: () => ({
-          order: () => ({
-            data: rows,
-            error: null,
-          }),
-          data: rows,
-          error: null,
-        }),
-      }),
-    }),
-  }
 }
 
 beforeEach(() => {
@@ -84,10 +58,7 @@ describe('GET /api/analytics', () => {
   it('accepts valid range values', async () => {
     mockGetUser.mockResolvedValue({ data: { user: { id: 'user-1' } } })
 
-    // Return empty endpoints to short-circuit
-    mockFrom.mockReturnValue({
-      select: () => ({ data: [], error: null }),
-    })
+    mockRpc.mockResolvedValue({ data: [], error: null })
 
     for (const range of ['7', '30', '90']) {
       const res = await GET(createRequest({ range }) as never)
@@ -95,16 +66,17 @@ describe('GET /api/analytics', () => {
     }
   })
 
-  it('returns empty data when user has no endpoints', async () => {
+  it('returns empty data when RPCs return empty results', async () => {
     mockGetUser.mockResolvedValue({ data: { user: { id: 'user-1' } } })
-    mockFrom.mockReturnValue({
-      select: () => ({ data: [], error: null }),
-    })
+    mockRpc.mockResolvedValue({ data: [], error: null })
 
     const res = await GET(createRequest() as never)
     expect(res.status).toBe(200)
     const json: AnalyticsResponse = await res.json()
-    expect(json.volumeByDay).toEqual([])
+
+    // volumeByDay should still have entries for each day (zero-filled)
+    expect(json.volumeByDay.length).toBeGreaterThanOrEqual(1)
+    expect(json.volumeByDay.every((v) => v.count === 0)).toBe(true)
     expect(json.methodBreakdown).toEqual([])
     expect(json.topEndpoints).toEqual([])
   })
@@ -113,67 +85,117 @@ describe('GET /api/analytics', () => {
     mockGetUser.mockResolvedValue({ data: { user: { id: 'user-1' } } })
 
     const today = new Date().toISOString().slice(0, 10)
-    const endpoints = [
-      { id: 'ep-1', name: 'Stripe', slug: 'stripe' },
-      { id: 'ep-2', name: 'GitHub', slug: 'github' },
-    ]
 
-    let callCount = 0
-    mockFrom.mockImplementation((table: string) => {
-      if (table === 'endpoints') {
-        return mockEndpoints(endpoints)
+    mockRpc.mockImplementation((fnName: string) => {
+      if (fnName === 'get_volume_by_day') {
+        return Promise.resolve({
+          data: [{ day: today, count: 3 }],
+          error: null,
+        })
       }
-
-      // requests table — called 3 times (volume, method, top endpoints)
-      callCount++
-      if (callCount === 1) {
-        // Volume rows
-        return mockRequests([
-          { received_at: `${today}T10:00:00Z` },
-          { received_at: `${today}T11:00:00Z` },
-          { received_at: `${today}T12:00:00Z` },
-        ])
+      if (fnName === 'get_method_breakdown') {
+        return Promise.resolve({
+          data: [
+            { method: 'POST', count: 2 },
+            { method: 'GET', count: 1 },
+          ],
+          error: null,
+        })
       }
-      if (callCount === 2) {
-        // Method rows
-        return mockRequests([{ method: 'POST' }, { method: 'POST' }, { method: 'GET' }])
+      if (fnName === 'get_top_endpoints') {
+        return Promise.resolve({
+          data: [
+            { endpoint_id: 'ep-1', endpoint_name: 'Stripe', endpoint_slug: 'stripe', count: 2 },
+            { endpoint_id: 'ep-2', endpoint_name: 'GitHub', endpoint_slug: 'github', count: 1 },
+          ],
+          error: null,
+        })
       }
-      // Endpoint rows
-      return mockRequests([
-        { endpoint_id: 'ep-1' },
-        { endpoint_id: 'ep-1' },
-        { endpoint_id: 'ep-2' },
-      ])
+      return Promise.resolve({ data: [], error: null })
     })
 
     const res = await GET(createRequest({ range: '7' }) as never)
     expect(res.status).toBe(200)
     const json: AnalyticsResponse = await res.json()
 
-    // Volume should have entries for each day in range
+    // Volume should have entries for each day in range (zero-filled)
     expect(json.volumeByDay.length).toBeGreaterThanOrEqual(7)
     const todayEntry = json.volumeByDay.find((v) => v.date === today)
     expect(todayEntry?.count).toBe(3)
 
-    // Method breakdown should have POST and GET
-    expect(json.methodBreakdown).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({ method: 'POST', count: 2 }),
-        expect.objectContaining({ method: 'GET', count: 1 }),
-      ])
-    )
+    // Method breakdown should have POST and GET sorted by count DESC
+    expect(json.methodBreakdown).toEqual([
+      { method: 'POST', count: 2 },
+      { method: 'GET', count: 1 },
+    ])
 
     // Top endpoints should be sorted by count descending
     expect(json.topEndpoints[0].id).toBe('ep-1')
+    expect(json.topEndpoints[0].name).toBe('Stripe')
+    expect(json.topEndpoints[0].slug).toBe('stripe')
     expect(json.topEndpoints[0].count).toBe(2)
     expect(json.topEndpoints[1].id).toBe('ep-2')
     expect(json.topEndpoints[1].count).toBe(1)
   })
 
-  it('returns 500 when endpoints query fails', async () => {
+  it('passes correct parameters to RPC functions', async () => {
     mockGetUser.mockResolvedValue({ data: { user: { id: 'user-1' } } })
-    mockFrom.mockReturnValue({
-      select: () => ({ data: null, error: { message: 'db error' } }),
+    mockRpc.mockResolvedValue({ data: [], error: null })
+
+    await GET(createRequest({ range: '7' }) as never)
+
+    expect(mockRpc).toHaveBeenCalledWith('get_volume_by_day', {
+      p_user_id: 'user-1',
+      p_days: 7,
+    })
+    expect(mockRpc).toHaveBeenCalledWith('get_method_breakdown', {
+      p_user_id: 'user-1',
+      p_days: 7,
+    })
+    expect(mockRpc).toHaveBeenCalledWith('get_top_endpoints', {
+      p_user_id: 'user-1',
+      p_days: 7,
+      p_limit: 10,
+    })
+  })
+
+  it('returns 500 when volume RPC fails', async () => {
+    mockGetUser.mockResolvedValue({ data: { user: { id: 'user-1' } } })
+    mockRpc.mockImplementation((fnName: string) => {
+      if (fnName === 'get_volume_by_day') {
+        return Promise.resolve({ data: null, error: { message: 'db error' } })
+      }
+      return Promise.resolve({ data: [], error: null })
+    })
+
+    const res = await GET(createRequest() as never)
+    expect(res.status).toBe(500)
+    const json = await res.json()
+    expect(json.error).toBe('Failed to fetch analytics')
+  })
+
+  it('returns 500 when method breakdown RPC fails', async () => {
+    mockGetUser.mockResolvedValue({ data: { user: { id: 'user-1' } } })
+    mockRpc.mockImplementation((fnName: string) => {
+      if (fnName === 'get_method_breakdown') {
+        return Promise.resolve({ data: null, error: { message: 'db error' } })
+      }
+      return Promise.resolve({ data: [], error: null })
+    })
+
+    const res = await GET(createRequest() as never)
+    expect(res.status).toBe(500)
+    const json = await res.json()
+    expect(json.error).toBe('Failed to fetch analytics')
+  })
+
+  it('returns 500 when top endpoints RPC fails', async () => {
+    mockGetUser.mockResolvedValue({ data: { user: { id: 'user-1' } } })
+    mockRpc.mockImplementation((fnName: string) => {
+      if (fnName === 'get_top_endpoints') {
+        return Promise.resolve({ data: null, error: { message: 'db error' } })
+      }
+      return Promise.resolve({ data: [], error: null })
     })
 
     const res = await GET(createRequest() as never)
@@ -184,11 +206,45 @@ describe('GET /api/analytics', () => {
 
   it('defaults to 30-day range when no range param provided', async () => {
     mockGetUser.mockResolvedValue({ data: { user: { id: 'user-1' } } })
-    mockFrom.mockReturnValue({
-      select: () => ({ data: [], error: null }),
-    })
+    mockRpc.mockResolvedValue({ data: [], error: null })
 
     const res = await GET(createRequest() as never)
     expect(res.status).toBe(200)
+
+    expect(mockRpc).toHaveBeenCalledWith('get_volume_by_day', {
+      p_user_id: 'user-1',
+      p_days: 30,
+    })
+  })
+
+  it('fills missing days with zero counts', async () => {
+    mockGetUser.mockResolvedValue({ data: { user: { id: 'user-1' } } })
+
+    // Only return data for today — all other days should be zero-filled
+    const today = new Date().toISOString().slice(0, 10)
+    mockRpc.mockImplementation((fnName: string) => {
+      if (fnName === 'get_volume_by_day') {
+        return Promise.resolve({
+          data: [{ day: today, count: 5 }],
+          error: null,
+        })
+      }
+      return Promise.resolve({ data: [], error: null })
+    })
+
+    const res = await GET(createRequest({ range: '7' }) as never)
+    expect(res.status).toBe(200)
+    const json: AnalyticsResponse = await res.json()
+
+    // Should have at least 7 days (today + 6 days back, plus possibly 1 more depending on timing)
+    expect(json.volumeByDay.length).toBeGreaterThanOrEqual(7)
+
+    // Today should have count 5
+    const todayEntry = json.volumeByDay.find((v) => v.date === today)
+    expect(todayEntry?.count).toBe(5)
+
+    // All other days should be zero
+    const otherDays = json.volumeByDay.filter((v) => v.date !== today)
+    expect(otherDays.every((v) => v.count === 0)).toBe(true)
   })
 })

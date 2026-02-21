@@ -36,6 +36,34 @@ export interface AnalyticsResponse {
   topEndpoints: TopEndpoint[]
 }
 
+function fillMissingDays(
+  rows: Array<{ day: string; count: number }>,
+  range: number
+): VolumeByDay[] {
+  const dayMap = new Map<string, number>()
+  for (const row of rows) {
+    // RPC returns DATE as 'YYYY-MM-DD' string
+    dayMap.set(row.day, Number(row.count))
+  }
+
+  const result: VolumeByDay[] = []
+  const sinceDate = new Date()
+  sinceDate.setDate(sinceDate.getDate() - range)
+  sinceDate.setHours(0, 0, 0, 0)
+
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+
+  const current = new Date(sinceDate)
+  while (current <= today) {
+    const dateStr = current.toISOString().slice(0, 10)
+    result.push({ date: dateStr, count: dayMap.get(dateStr) ?? 0 })
+    current.setDate(current.getDate() + 1)
+  }
+
+  return result
+}
+
 export async function GET(req: NextRequest): Promise<NextResponse> {
   const log = createRequestLogger('analytics')
 
@@ -61,117 +89,52 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
   }
 
   const { range } = parsed.data
-  const sinceDate = new Date()
-  sinceDate.setDate(sinceDate.getDate() - range)
-  const sinceIso = sinceDate.toISOString()
 
   try {
-    // Fetch user's endpoint IDs (RLS ensures only their own)
-    const { data: endpoints, error: endpointsError } = await supabase
-      .from('endpoints')
-      .select('id, name, slug')
+    // Execute all three RPC calls in parallel — aggregation happens in PostgreSQL
+    const [volumeResult, methodResult, topEndpointsResult] = await Promise.all([
+      supabase.rpc('get_volume_by_day', { p_user_id: user.id, p_days: range }),
+      supabase.rpc('get_method_breakdown', { p_user_id: user.id, p_days: range }),
+      supabase.rpc('get_top_endpoints', { p_user_id: user.id, p_days: range, p_limit: 10 }),
+    ])
 
-    if (endpointsError) {
-      log.error({ err: endpointsError }, 'failed to fetch endpoints')
+    if (volumeResult.error) {
+      log.error({ err: volumeResult.error }, 'failed to fetch volume data')
       return NextResponse.json({ error: 'Failed to fetch analytics' }, { status: 500 })
     }
 
-    if (!endpoints || endpoints.length === 0) {
-      const empty: AnalyticsResponse = {
-        volumeByDay: [],
-        methodBreakdown: [],
-        topEndpoints: [],
-      }
-      return NextResponse.json(empty)
-    }
-
-    const endpointIds = endpoints.map((e) => e.id)
-
-    // Volume by day: aggregate request count per day
-    // Using Supabase's PostgREST, we need to fetch received_at and aggregate client-side
-    // for date grouping. However, to keep it efficient we only select the fields we need.
-    // A better approach would be an RPC, but to avoid a migration we'll use a targeted query.
-    const { data: volumeRows, error: volumeError } = await supabase
-      .from('requests')
-      .select('received_at')
-      .in('endpoint_id', endpointIds)
-      .gte('received_at', sinceIso)
-      .order('received_at', { ascending: true })
-
-    if (volumeError) {
-      log.error({ err: volumeError }, 'failed to fetch volume data')
+    if (methodResult.error) {
+      log.error({ err: methodResult.error }, 'failed to fetch method data')
       return NextResponse.json({ error: 'Failed to fetch analytics' }, { status: 500 })
     }
 
-    // Aggregate volume by day
-    const volumeMap = new Map<string, number>()
-    for (const row of volumeRows ?? []) {
-      const day = row.received_at.slice(0, 10)
-      volumeMap.set(day, (volumeMap.get(day) ?? 0) + 1)
-    }
-
-    // Fill in missing days with zero counts
-    const volumeByDay: VolumeByDay[] = []
-    const current = new Date(sinceDate)
-    current.setHours(0, 0, 0, 0)
-    const today = new Date()
-    today.setHours(0, 0, 0, 0)
-    while (current <= today) {
-      const dateStr = current.toISOString().slice(0, 10)
-      volumeByDay.push({ date: dateStr, count: volumeMap.get(dateStr) ?? 0 })
-      current.setDate(current.getDate() + 1)
-    }
-
-    // Method breakdown: aggregate request count per method
-    const { data: methodRows, error: methodError } = await supabase
-      .from('requests')
-      .select('method')
-      .in('endpoint_id', endpointIds)
-      .gte('received_at', sinceIso)
-
-    if (methodError) {
-      log.error({ err: methodError }, 'failed to fetch method data')
+    if (topEndpointsResult.error) {
+      log.error({ err: topEndpointsResult.error }, 'failed to fetch top endpoints data')
       return NextResponse.json({ error: 'Failed to fetch analytics' }, { status: 500 })
     }
 
-    const methodMap = new Map<string, number>()
-    for (const row of methodRows ?? []) {
-      methodMap.set(row.method, (methodMap.get(row.method) ?? 0) + 1)
-    }
-    const methodBreakdown: MethodBreakdown[] = Array.from(methodMap.entries())
-      .map(([method, count]) => ({ method, count }))
-      .sort((a, b) => b.count - a.count)
+    const volumeByDay = fillMissingDays(volumeResult.data ?? [], range)
 
-    // Top endpoints: aggregate request count per endpoint
-    const { data: endpointRows, error: endpointError } = await supabase
-      .from('requests')
-      .select('endpoint_id')
-      .in('endpoint_id', endpointIds)
-      .gte('received_at', sinceIso)
-
-    if (endpointError) {
-      log.error({ err: endpointError }, 'failed to fetch endpoint data')
-      return NextResponse.json({ error: 'Failed to fetch analytics' }, { status: 500 })
-    }
-
-    const endpointCountMap = new Map<string, number>()
-    for (const row of endpointRows ?? []) {
-      endpointCountMap.set(row.endpoint_id, (endpointCountMap.get(row.endpoint_id) ?? 0) + 1)
-    }
-
-    const endpointLookup = new Map(endpoints.map((e) => [e.id, e]))
-    const topEndpoints: TopEndpoint[] = Array.from(endpointCountMap.entries())
-      .map(([id, count]) => {
-        const ep = endpointLookup.get(id)
-        return {
-          id,
-          name: ep?.name ?? 'Unknown',
-          slug: ep?.slug ?? '',
-          count,
-        }
+    const methodBreakdown: MethodBreakdown[] = (methodResult.data ?? []).map(
+      (row: { method: string; count: number }) => ({
+        method: row.method,
+        count: Number(row.count),
       })
-      .sort((a, b) => b.count - a.count)
-      .slice(0, 10)
+    )
+
+    const topEndpoints: TopEndpoint[] = (topEndpointsResult.data ?? []).map(
+      (row: {
+        endpoint_id: string
+        endpoint_name: string
+        endpoint_slug: string
+        count: number
+      }) => ({
+        id: row.endpoint_id,
+        name: row.endpoint_name,
+        slug: row.endpoint_slug,
+        count: Number(row.count),
+      })
+    )
 
     const response: AnalyticsResponse = {
       volumeByDay,
