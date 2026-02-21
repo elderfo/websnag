@@ -28,6 +28,12 @@ vi.mock('@/lib/anthropic', () => ({
 }))
 
 vi.mock('@/lib/logger', () => ({
+  createLogger: () => ({
+    info: vi.fn(),
+    error: vi.fn(),
+    warn: vi.fn(),
+    debug: vi.fn(),
+  }),
   createRequestLogger: () => ({
     info: vi.fn(),
     error: vi.fn(),
@@ -35,6 +41,10 @@ vi.mock('@/lib/logger', () => ({
     debug: vi.fn(),
     requestId: 'test-request-id',
   }),
+}))
+
+vi.mock('@/lib/audit', () => ({
+  logAuditEvent: vi.fn(),
 }))
 
 function makeRequest(body: unknown): Request {

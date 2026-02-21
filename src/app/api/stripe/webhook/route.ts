@@ -2,7 +2,20 @@ import Stripe from 'stripe'
 import { stripe } from '@/lib/stripe'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { createRequestLogger } from '@/lib/logger'
+import { logAuditEvent } from '@/lib/audit'
 import { NextResponse } from 'next/server'
+
+async function resolveUserId(
+  supabase: ReturnType<typeof createAdminClient>,
+  customerId: string
+): Promise<string | null> {
+  const { data } = await supabase
+    .from('subscriptions')
+    .select('user_id')
+    .eq('stripe_customer_id', customerId)
+    .single()
+  return data?.user_id ?? null
+}
 
 export async function POST(req: Request) {
   const log = createRequestLogger('stripe-webhook')
@@ -60,6 +73,16 @@ export async function POST(req: Request) {
       }
 
       log.info({ customerId, subscriptionId }, 'checkout completed, upgraded to pro')
+
+      const checkoutUserId = await resolveUserId(supabase, customerId)
+      if (checkoutUserId) {
+        logAuditEvent({
+          userId: checkoutUserId,
+          action: 'subscription_changed',
+          resourceType: 'subscription',
+          metadata: { event: 'checkout.session.completed', plan: 'pro' },
+        })
+      }
       break
     }
 
@@ -128,6 +151,20 @@ export async function POST(req: Request) {
         },
         'subscription updated'
       )
+
+      const updatedUserId = await resolveUserId(supabase, customerId)
+      if (updatedUserId) {
+        logAuditEvent({
+          userId: updatedUserId,
+          action: 'subscription_changed',
+          resourceType: 'subscription',
+          metadata: {
+            event: 'customer.subscription.updated',
+            status: subscription.status,
+            cancelAtPeriodEnd: subscription.cancel_at_period_end,
+          },
+        })
+      }
       break
     }
 
@@ -155,6 +192,16 @@ export async function POST(req: Request) {
       }
 
       log.info({ customerId }, 'subscription deleted, downgraded to free')
+
+      const deletedUserId = await resolveUserId(supabase, customerId)
+      if (deletedUserId) {
+        logAuditEvent({
+          userId: deletedUserId,
+          action: 'subscription_changed',
+          resourceType: 'subscription',
+          metadata: { event: 'customer.subscription.deleted', plan: 'free' },
+        })
+      }
       break
     }
 
@@ -178,6 +225,16 @@ export async function POST(req: Request) {
       }
 
       log.info({ customerId }, 'invoice payment failed, marked as past_due')
+
+      const pastDueUserId = await resolveUserId(supabase, customerId)
+      if (pastDueUserId) {
+        logAuditEvent({
+          userId: pastDueUserId,
+          action: 'subscription_changed',
+          resourceType: 'subscription',
+          metadata: { event: 'invoice.payment_failed', status: 'past_due' },
+        })
+      }
       break
     }
   }

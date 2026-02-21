@@ -47,7 +47,8 @@ websnag/
 │       ├── 004_profiles_and_usernames.sql
 │       ├── 005_data_retention.sql   # Retention cleanup function + pg_cron schedule
 │       ├── 006_retention_alerting.sql  # RPC function to query pg_cron job run history
-│       └── 007_cancel_at_period_end.sql  # Boolean column for pending cancellation tracking
+│       ├── 007_cancel_at_period_end.sql  # Boolean column for pending cancellation tracking
+│       └── 008_audit_log.sql          # Audit log table + RLS for user-facing activity log
 ├── src/
 │   ├── app/
 │   │   ├── layout.tsx           # Root layout with providers
@@ -96,6 +97,8 @@ websnag/
 │   │   │   ├── filter-bar.tsx       # Method, date, search filters
 │   │   │   ├── bulk-actions.tsx     # Bulk select, delete, export bar
 │   │   ├── analysis/            # AI analysis display, code snippets
+│   │   ├── settings/            # Settings-specific components
+│   │   │   └── audit-log.tsx        # Activity log table (client component)
 │   │   ├── onboarding/          # Onboarding experience components
 │   │   │   └── checklist.tsx      # Dismissible onboarding checklist (localStorage-backed)
 │   │   └── billing/             # Upgrade prompts, usage display
@@ -109,6 +112,7 @@ websnag/
 │   │   ├── anthropic.ts         # Claude API client and prompts
 │   │   ├── email.ts              # Welcome email utility (Resend API or placeholder logging)
 │   │   ├── logger.ts             # Pino structured logger (createLogger, createRequestLogger)
+│   │   ├── audit.ts              # Fire-and-forget audit log writer (admin client)
 │   │   ├── retention-health.ts   # Pure retention job health evaluation logic
 │   │   ├── usage.ts             # Usage tracking and limit checking
 │   │   └── utils.ts             # Shared utilities
