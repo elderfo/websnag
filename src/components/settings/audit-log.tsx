@@ -54,6 +54,8 @@ function formatDetails(entry: AuditLogEntry): string {
     if (meta.event) parts.push(`event: ${String(meta.event)}`)
     if (meta.plan) parts.push(`plan: ${String(meta.plan)}`)
     if (meta.status) parts.push(`status: ${String(meta.status)}`)
+    if (meta.cancelAtPeriodEnd !== undefined)
+      parts.push(`cancelAtPeriodEnd: ${String(meta.cancelAtPeriodEnd)}`)
   }
 
   return parts.join(', ')
