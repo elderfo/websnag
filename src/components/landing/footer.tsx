@@ -1,3 +1,5 @@
+import Link from 'next/link'
+
 import { Wordmark } from '@/components/ui/wordmark'
 
 export function Footer() {
@@ -23,12 +25,12 @@ export function Footer() {
             >
               Docs
             </a>
-            <a
-              href="#"
+            <Link
+              href="/privacy"
               className="text-sm text-text-muted transition-colors hover:text-text-secondary"
             >
               Privacy
-            </a>
+            </Link>
             <a
               href="#"
               className="text-sm text-text-muted transition-colors hover:text-text-secondary"
