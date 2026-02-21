@@ -1,6 +1,11 @@
 import { createAdminClient } from '@/lib/supabase/admin'
 import { createRequestLogger } from '@/lib/logger'
-import { checkSlugRateLimit, checkIpRateLimit, RateLimitResult } from '@/lib/rate-limit'
+import {
+  checkSlugRateLimit,
+  checkIpRateLimit,
+  checkAccountRateLimit,
+  RateLimitResult,
+} from '@/lib/rate-limit'
 import { getUserPlan, canReceiveRequest } from '@/lib/usage'
 import { NextRequest, NextResponse } from 'next/server'
 
@@ -277,6 +282,37 @@ async function handleWebhookCapture(
     .single()
 
   const plan = getUserPlan(subscription)
+
+  // 5b. Per-account rate limit (tier-aware, checked after plan resolution)
+  try {
+    const accountResult = await checkAccountRateLimit(profile.id, plan)
+    if (accountResult) {
+      // Use the most restrictive rate limit result for response headers
+      if (!primaryResult || accountResult.remaining < primaryResult.remaining) {
+        primaryResult = accountResult
+      }
+
+      if (!accountResult.success) {
+        const retryAfterMs = Math.max(0, accountResult.reset - Date.now())
+        const retryAfterSecs = Math.ceil(retryAfterMs / 1000)
+        const rlHeaders = new Headers({
+          'Retry-After': String(retryAfterSecs),
+          'X-RateLimit-Limit': String(accountResult.limit),
+          'X-RateLimit-Remaining': String(accountResult.remaining),
+        })
+        return NextResponse.json(
+          { error: 'Rate limit exceeded' },
+          { status: 429, headers: rlHeaders }
+        )
+      }
+    }
+  } catch (error) {
+    // Fail open: if rate limiting itself throws, allow the request
+    log.error(
+      { err: error, userId: profile.id },
+      'account rate limiting check failed, allowing request'
+    )
+  }
 
   const { data: usageData } = await supabase.rpc('get_current_usage', {
     p_user_id: endpoint.user_id,
