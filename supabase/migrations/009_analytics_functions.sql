@@ -17,7 +17,7 @@ BEGIN
   GROUP BY DATE(r.received_at)
   ORDER BY day ASC;
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
 
 -- Request count grouped by HTTP method
 CREATE OR REPLACE FUNCTION get_method_breakdown(p_user_id UUID, p_days INT)
@@ -35,7 +35,7 @@ BEGIN
   GROUP BY r.method
   ORDER BY count DESC;
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
 
 -- Top endpoints by request count
 CREATE OR REPLACE FUNCTION get_top_endpoints(p_user_id UUID, p_days INT, p_limit INT DEFAULT 5)
@@ -55,4 +55,4 @@ BEGIN
   ORDER BY count DESC
   LIMIT p_limit;
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
