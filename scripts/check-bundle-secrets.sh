@@ -5,7 +5,7 @@
 set -euo pipefail
 
 BUNDLE_DIR=".next/static"
-SECRET_PATTERNS=("sk-ant-" "sb_secret_" "sk_live_" "sk_test_" "whsec_")
+SECRET_PATTERNS=("sk-ant-" "sb_secret_" "sk_live_" "sk_test_" "whsec_" "re_")
 FOUND=0
 
 if [ ! -d "$BUNDLE_DIR" ]; then
