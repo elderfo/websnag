@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { createRequestLogger } from '@/lib/logger'
+import { logAuditEvent } from '@/lib/audit'
 import { analyzeWebhook } from '@/lib/anthropic'
 import { analyzeRequestSchema } from '@/lib/validators'
 import { canAnalyze, getUserPlan } from '@/lib/usage'
@@ -98,6 +99,14 @@ export async function POST(req: Request) {
     }
 
     log.info({ requestId, userId: user.id, source: analysis.source }, 'AI analysis completed')
+
+    logAuditEvent({
+      userId: user.id,
+      action: 'analyze',
+      resourceType: 'request',
+      resourceId: requestId,
+      metadata: { source: analysis.source, webhookType: analysis.webhook_type },
+    })
 
     return NextResponse.json(analysis)
   } catch (error) {

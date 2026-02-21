@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { createRequestLogger } from '@/lib/logger'
+import { logAuditEvent } from '@/lib/audit'
 import { updateEndpointSchema } from '@/lib/validators'
 import { getUserPlan } from '@/lib/usage'
 import { isValidCustomSlug } from '@/lib/utils'
@@ -173,6 +174,13 @@ export async function DELETE(
   }
 
   log.info({ endpointId: id }, 'endpoint deleted')
+
+  logAuditEvent({
+    userId: user.id,
+    action: 'delete',
+    resourceType: 'endpoint',
+    resourceId: id,
+  })
 
   return new NextResponse(null, { status: 204 })
 }

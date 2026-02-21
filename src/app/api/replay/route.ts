@@ -1,5 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
 import { createRequestLogger } from '@/lib/logger'
+import { logAuditEvent } from '@/lib/audit'
 import { replayRequestSchema } from '@/lib/validators'
 import { getUserPlan } from '@/lib/usage'
 import { validateTargetUrl } from '@/lib/url-validator'
@@ -126,6 +127,14 @@ export async function POST(req: Request) {
       const responseHeaders: Record<string, string> = {}
       response.headers.forEach((value, key) => {
         responseHeaders[key] = value
+      })
+
+      logAuditEvent({
+        userId: user.id,
+        action: 'replay',
+        resourceType: 'request',
+        resourceId: requestId,
+        metadata: { targetUrl: targetUrl.substring(0, 50), responseStatus: response.status },
       })
 
       return NextResponse.json({
