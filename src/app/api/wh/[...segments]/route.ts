@@ -21,6 +21,22 @@ function getSourceIp(req: NextRequest): string {
   return req.headers.get('x-real-ip') ?? 'unknown'
 }
 
+/**
+ * Selects the most restrictive rate limit result from all active limiters.
+ * "Most restrictive" = lowest `remaining` count. Ties broken by highest
+ * `reset` timestamp (the window that resets furthest in the future).
+ */
+function selectMostRestrictive(results: RateLimitResult[]): RateLimitResult | null {
+  if (results.length === 0) return null
+  return results.reduce((mostRestrictive, current) => {
+    if (current.remaining < mostRestrictive.remaining) return current
+    if (current.remaining === mostRestrictive.remaining && current.reset > mostRestrictive.reset) {
+      return current
+    }
+    return mostRestrictive
+  })
+}
+
 function applyRateLimitHeaders(headers: Headers, rateLimitResult: RateLimitResult | null): void {
   if (rateLimitResult) {
     headers.set('X-RateLimit-Limit', String(rateLimitResult.limit))
@@ -163,6 +179,7 @@ async function handleWebhookCapture(
 
   // 1. Rate limiting checks — BEFORE any database queries
   let primaryResult: RateLimitResult | null = null
+  const allRateLimitResults: RateLimitResult[] = []
 
   try {
     const [slugResult, ipResult] = await Promise.all([
@@ -170,8 +187,9 @@ async function handleWebhookCapture(
       sourceIp !== 'unknown' ? checkIpRateLimit(sourceIp) : Promise.resolve(null),
     ])
 
-    // Prefer slug-based rate limit info (more specific), fall back to IP-based
-    primaryResult = slugResult ?? ipResult
+    if (slugResult) allRateLimitResults.push(slugResult)
+    if (ipResult) allRateLimitResults.push(ipResult)
+    primaryResult = selectMostRestrictive(allRateLimitResults)
 
     // Check slug rate limit
     if (slugResult && !slugResult.success) {
@@ -287,10 +305,7 @@ async function handleWebhookCapture(
   try {
     const accountResult = await checkAccountRateLimit(profile.id, plan)
     if (accountResult) {
-      // Use the most restrictive rate limit result for response headers
-      if (!primaryResult || accountResult.remaining < primaryResult.remaining) {
-        primaryResult = accountResult
-      }
+      allRateLimitResults.push(accountResult)
 
       if (!accountResult.success) {
         const retryAfterMs = Math.max(0, accountResult.reset - Date.now())
@@ -313,6 +328,9 @@ async function handleWebhookCapture(
       'account rate limiting check failed, allowing request'
     )
   }
+
+  // Select the most restrictive rate limit result across all active limiters
+  primaryResult = selectMostRestrictive(allRateLimitResults)
 
   const { data: usageData } = await supabase.rpc('get_current_usage', {
     p_user_id: endpoint.user_id,
