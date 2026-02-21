@@ -961,6 +961,7 @@ describe('response header filtering (#62)', () => {
     const endpointWithForbiddenHeaders = {
       ...mockEndpoint,
       response_headers: {
+        'Content-Type': 'application/json',
         'Set-Cookie': 'evil=true',
         'X-Custom': 'allowed',
         Location: 'https://evil.com',
