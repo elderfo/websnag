@@ -6,6 +6,7 @@ import {
   checkAccountRateLimit,
   RateLimitResult,
 } from '@/lib/rate-limit'
+import { isAllowedResponseHeader } from '@/lib/security'
 import { getUserPlan, canReceiveRequest } from '@/lib/usage'
 import { NextRequest, NextResponse } from 'next/server'
 
@@ -382,7 +383,9 @@ async function handleWebhookCapture(
     for (const [key, value] of Object.entries(
       endpoint.response_headers as Record<string, string>
     )) {
-      responseHeaders.set(key, String(value))
+      if (isAllowedResponseHeader(key)) {
+        responseHeaders.set(key, String(value))
+      }
     }
   }
 

@@ -925,6 +925,70 @@ describe('slug enumeration hardening (#10)', () => {
 })
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Response header filtering (#62)
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('response header filtering (#62)', () => {
+  let profileChain: ReturnType<typeof setupProfileQuery>
+  let endpointChain: ReturnType<typeof setupEndpointQuery>
+  let subscriptionChain: ReturnType<typeof setupSubscriptionQuery>
+  let insertChain: ReturnType<typeof setupInsert>
+
+  const params = Promise.resolve({ segments: ['johndoe', 'test-slug'] })
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+
+    profileChain = setupProfileQuery(mockProfile)
+    subscriptionChain = setupSubscriptionQuery({ plan: 'free', status: 'active' })
+    insertChain = setupInsert()
+
+    mockRpc.mockImplementation((fn: string) => {
+      if (fn === 'get_current_usage') {
+        return Promise.resolve({ data: [{ request_count: 5, ai_analysis_count: 0 }] })
+      }
+      if (fn === 'increment_request_count') {
+        return Promise.resolve({ data: null, error: null })
+      }
+      return Promise.resolve({ data: null, error: null })
+    })
+
+    mockCheckSlugRateLimit.mockResolvedValue(passingRateLimit)
+    mockCheckIpRateLimit.mockResolvedValue({ ...passingRateLimit, limit: 200 })
+  })
+
+  it('filters forbidden headers (Set-Cookie, Location) from user-configured response', async () => {
+    const endpointWithForbiddenHeaders = {
+      ...mockEndpoint,
+      response_headers: {
+        'Set-Cookie': 'evil=true',
+        'X-Custom': 'allowed',
+        Location: 'https://evil.com',
+      },
+    }
+    endpointChain = setupEndpointQuery(endpointWithForbiddenHeaders)
+
+    mockFrom.mockImplementation((table: string) => {
+      if (table === 'profiles') return profileChain
+      if (table === 'endpoints') return endpointChain
+      if (table === 'subscriptions') return subscriptionChain
+      if (table === 'requests') return insertChain
+      return {}
+    })
+
+    const req = createRequest('POST', { body: '{}' })
+    const res = await handleWebhook(req, { params })
+
+    expect(res.status).toBe(200)
+    // Allowed header should be present
+    expect(res.headers.get('X-Custom')).toBe('allowed')
+    // Forbidden headers must NOT be present
+    expect(res.headers.get('Set-Cookie')).toBeNull()
+    expect(res.headers.get('Location')).toBeNull()
+  })
+})
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Constant exposed for test use
 // ─────────────────────────────────────────────────────────────────────────────
 const MAX_BODY_SIZE = 1_048_576
