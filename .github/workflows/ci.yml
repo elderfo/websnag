@@ -63,16 +63,24 @@ jobs:
       - run: pnpm test
 
   build:
-    name: Build
+    name: Build & Check Secrets
     runs-on: ubuntu-latest
     needs: [lint, typecheck, test]
     env:
+      # Dummy values so next build succeeds without real credentials.
+      # IMPORTANT: Values must NOT contain secret prefixes (sk-ant-, sb_secret_,
+      # sk_live_, sk_test_, whsec_) or the bundle secret scan will flag them.
       NEXT_PUBLIC_SUPABASE_URL: https://placeholder.supabase.co
-      NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: placeholder
-      SUPABASE_SECRET_KEY: placeholder
-      STRIPE_SECRET_KEY: sk_test_placeholder
+      NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: sb_publishable_placeholder
+      SUPABASE_SECRET_KEY: placeholder_supabase_secret
+      ANTHROPIC_API_KEY: placeholder_anthropic_key
+      STRIPE_SECRET_KEY: placeholder_stripe_secret
+      STRIPE_WEBHOOK_SECRET: placeholder_webhook_secret
       NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY: pk_test_placeholder
+      STRIPE_PRO_PRICE_ID: price_placeholder
       NEXT_PUBLIC_APP_URL: http://localhost:3000
+      UPSTASH_REDIS_REST_URL: https://placeholder.upstash.io
+      UPSTASH_REDIS_REST_TOKEN: placeholder_upstash_token
     steps:
       - uses: actions/checkout@v4
 
@@ -86,6 +94,9 @@ jobs:
       - run: pnpm install --frozen-lockfile
 
       - run: pnpm build
+
+      - name: Scan client bundles for leaked secrets
+        run: pnpm check-secrets
 
   deploy-production:
     name: Deploy to Production

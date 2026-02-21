@@ -34,6 +34,11 @@ websnag/
 ├── CLAUDE.md                    # This file
 ├── .env.local                   # Local environment variables (never commit)
 ├── .env.example                 # Template for env vars
+├── .github/
+│   └── workflows/
+│       └── ci.yml               # CI pipeline: lint, typecheck, test, build + bundle secret scan
+├── scripts/
+│   └── check-bundle-secrets.sh  # Scans .next/static/ for leaked secret key prefixes
 ├── supabase/
 │   └── migrations/              # SQL migration files (numbered)
 │       ├── 001_initial_schema.sql

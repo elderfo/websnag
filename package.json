@@ -12,6 +12,7 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
+    "check-secrets": "bash scripts/check-bundle-secrets.sh",
     "prepare": "husky"
   },
   "dependencies": {
