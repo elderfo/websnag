@@ -3,6 +3,7 @@ import {
   isSafeRedirectPath,
   FORBIDDEN_RESPONSE_HEADERS,
   isAllowedResponseHeader,
+  escapeLikePattern,
 } from '@/lib/security'
 
 describe('isSafeRedirectPath', () => {
@@ -116,5 +117,39 @@ describe('isAllowedResponseHeader', () => {
     expect(isAllowedResponseHeader('Transfer-Encoding')).toBe(false)
     expect(isAllowedResponseHeader('Connection')).toBe(false)
     expect(isAllowedResponseHeader('Upgrade')).toBe(false)
+  })
+})
+
+describe('escapeLikePattern', () => {
+  it('returns plain strings unchanged', () => {
+    expect(escapeLikePattern('hello')).toBe('hello')
+    expect(escapeLikePattern('test123')).toBe('test123')
+  })
+
+  it('escapes percent signs', () => {
+    expect(escapeLikePattern('100%')).toBe('100\\%')
+    expect(escapeLikePattern('%admin%')).toBe('\\%admin\\%')
+  })
+
+  it('escapes underscores', () => {
+    expect(escapeLikePattern('user_name')).toBe('user\\_name')
+    expect(escapeLikePattern('__init__')).toBe('\\_\\_init\\_\\_')
+  })
+
+  it('escapes backslashes', () => {
+    expect(escapeLikePattern('path\\file')).toBe('path\\\\file')
+    expect(escapeLikePattern('\\')).toBe('\\\\')
+  })
+
+  it('escapes all special characters together', () => {
+    expect(escapeLikePattern('100%_\\done')).toBe('100\\%\\_\\\\done')
+  })
+
+  it('returns empty string unchanged', () => {
+    expect(escapeLikePattern('')).toBe('')
+  })
+
+  it('handles strings with no special characters', () => {
+    expect(escapeLikePattern('abc def 123')).toBe('abc def 123')
   })
 })

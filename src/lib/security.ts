@@ -43,3 +43,11 @@ export const FORBIDDEN_RESPONSE_HEADERS: Set<string> = new Set([
 export function isAllowedResponseHeader(name: string): boolean {
   return !FORBIDDEN_RESPONSE_HEADERS.has(name.toLowerCase())
 }
+
+/**
+ * Escapes SQL LIKE pattern metacharacters (%, _, \) by prefixing each
+ * with a backslash so they are treated as literal characters.
+ */
+export function escapeLikePattern(pattern: string): string {
+  return pattern.replace(/[\\%_]/g, (char) => `\\${char}`)
+}
