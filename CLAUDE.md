@@ -34,6 +34,11 @@ websnag/
 ├── CLAUDE.md                    # This file
 ├── .env.local                   # Local environment variables (never commit)
 ├── .env.example                 # Template for env vars
+├── .github/
+│   └── workflows/
+│       └── ci.yml               # CI pipeline: lint, typecheck, test, build + bundle secret scan
+├── scripts/
+│   └── check-bundle-secrets.sh  # Scans .next/static/ for leaked secret key prefixes
 ├── supabase/
 │   └── migrations/              # SQL migration files (numbered)
 │       ├── 001_initial_schema.sql
@@ -51,6 +56,8 @@ websnag/
 │   │   │   ├── login/page.tsx
 │   │   │   ├── callback/route.ts  # OAuth callback handler
 │   │   │   └── redirect/page.tsx  # Client-side post-auth redirect (handles upgrade intent)
+│   │   ├── privacy/
+│   │   │   └── page.tsx         # Privacy policy (server component, public)
 │   │   ├── (dashboard)/
 │   │   │   ├── layout.tsx       # Dashboard shell (sidebar + header)
 │   │   │   ├── dashboard/page.tsx  # Endpoint list / overview
@@ -81,12 +88,16 @@ websnag/
 │   ├── components/
 │   │   ├── ui/                  # Reusable UI primitives (button, input, card, badge, etc.)
 │   │   │   ├── confirm-dialog.tsx   # Generic confirmation modal
+│   │   │   ├── wordmark.tsx         # Two-tone "websnag" brand wordmark (web=gray, snag=green)
 │   │   ├── layout/              # Header, Sidebar, Nav
 │   │   ├── endpoints/           # Endpoint-specific components
+│   │   │   ├── code-snippets.tsx    # Multi-language webhook request examples (collapsible)
 │   │   ├── requests/            # Request feed, detail view, filters
 │   │   │   ├── filter-bar.tsx       # Method, date, search filters
 │   │   │   ├── bulk-actions.tsx     # Bulk select, delete, export bar
 │   │   ├── analysis/            # AI analysis display, code snippets
+│   │   ├── onboarding/          # Onboarding experience components
+│   │   │   └── checklist.tsx      # Dismissible onboarding checklist (localStorage-backed)
 │   │   └── billing/             # Upgrade prompts, usage display
 │   ├── lib/
 │   │   ├── supabase/
@@ -96,6 +107,7 @@ websnag/
 │   │   │   └── cron.ts          # Query pg_cron job run history via RPC
 │   │   ├── stripe.ts            # Stripe client and helpers
 │   │   ├── anthropic.ts         # Claude API client and prompts
+│   │   ├── email.ts              # Welcome email utility (Resend API or placeholder logging)
 │   │   ├── logger.ts             # Pino structured logger (createLogger, createRequestLogger)
 │   │   ├── retention-health.ts   # Pure retention job health evaluation logic
 │   │   ├── usage.ts             # Usage tracking and limit checking

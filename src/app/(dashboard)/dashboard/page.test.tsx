@@ -30,6 +30,17 @@ const mockUsage = [{ request_count: 42, ai_analysis_count: 3 }]
 // --- Supabase mock builder ---
 let supabaseError: string | null = null
 
+function createRequestsCountResult(error: string | null) {
+  const errObj = error ? { message: error } : null
+  return {
+    gte: vi.fn().mockReturnValue({ data: null, count: 7, error: errObj }),
+    not: vi.fn().mockReturnValue({ data: null, count: 2, error: errObj }),
+    data: null,
+    count: 5,
+    error: errObj,
+  }
+}
+
 function createMockSupabase() {
   return {
     auth: {
@@ -50,15 +61,8 @@ function createMockSupabase() {
       if (table === 'requests') {
         return {
           select: vi.fn((_columns: string, opts?: { count?: string; head?: boolean }) => {
-            if (opts?.count === 'exact') {
-              // Today's request count query
-              return {
-                gte: vi.fn().mockReturnValue({
-                  data: null,
-                  count: 7,
-                  error: supabaseError ? { message: supabaseError } : null,
-                }),
-              }
+            if (opts?.count) {
+              return createRequestsCountResult(supabaseError)
             }
             // Recent requests query
             return {
@@ -180,6 +184,10 @@ vi.mock('@/components/dashboard/upgrade-banner', () => ({
   UpgradeBanner: () => null,
 }))
 
+vi.mock('@/components/onboarding/checklist', () => ({
+  OnboardingChecklist: () => <div data-testid="onboarding-checklist" />,
+}))
+
 import DashboardPage from './page'
 
 describe('DashboardPage', () => {
@@ -233,10 +241,8 @@ describe('DashboardPage', () => {
       if (table === 'requests') {
         return {
           select: vi.fn((_columns: string, opts?: { count?: string; head?: boolean }) => {
-            if (opts?.count === 'exact') {
-              return {
-                gte: vi.fn().mockReturnValue({ data: null, count: 7, error: null }),
-              }
+            if (opts?.count) {
+              return createRequestsCountResult(null)
             }
             return {
               order: vi.fn().mockReturnValue({
@@ -297,8 +303,14 @@ describe('DashboardPage', () => {
       if (table === 'requests') {
         return {
           select: vi.fn((_columns: string, opts?: { count?: string }) => {
-            if (opts?.count === 'exact') {
-              return { gte: vi.fn().mockReturnValue({ data: null, count: 0, error: null }) }
+            if (opts?.count) {
+              return {
+                gte: vi.fn().mockReturnValue({ data: null, count: 0, error: null }),
+                not: vi.fn().mockReturnValue({ data: null, count: 0, error: null }),
+                data: null,
+                count: 0,
+                error: null,
+              }
             }
             return {
               order: vi.fn().mockReturnValue({

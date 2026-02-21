@@ -11,9 +11,10 @@ function getFirst(text: string | RegExp) {
 }
 
 describe('Sidebar', () => {
-  it('renders the websnag logo', () => {
+  it('renders the websnag wordmark', () => {
     render(<Sidebar />)
-    expect(getFirst('websnag')).toBeInTheDocument()
+    expect(getFirst('web')).toBeInTheDocument()
+    expect(getFirst('snag')).toBeInTheDocument()
   })
 
   it('renders all navigation links', () => {
