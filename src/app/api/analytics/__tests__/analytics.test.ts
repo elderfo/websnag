@@ -74,8 +74,8 @@ describe('GET /api/analytics', () => {
     expect(res.status).toBe(200)
     const json: AnalyticsResponse = await res.json()
 
-    // volumeByDay should still have entries for each day (zero-filled)
-    expect(json.volumeByDay.length).toBeGreaterThanOrEqual(1)
+    // volumeByDay should have exactly 30 entries (default range, zero-filled)
+    expect(json.volumeByDay.length).toBe(30)
     expect(json.volumeByDay.every((v) => v.count === 0)).toBe(true)
     expect(json.methodBreakdown).toEqual([])
     expect(json.topEndpoints).toEqual([])
@@ -84,7 +84,9 @@ describe('GET /api/analytics', () => {
   it('returns aggregated analytics data', async () => {
     mockGetUser.mockResolvedValue({ data: { user: { id: 'user-1' } } })
 
-    const today = new Date().toISOString().slice(0, 10)
+    const now = new Date()
+    const todayUTC = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()))
+    const today = todayUTC.toISOString().slice(0, 10)
 
     mockRpc.mockImplementation((fnName: string) => {
       if (fnName === 'get_volume_by_day') {
@@ -118,8 +120,8 @@ describe('GET /api/analytics', () => {
     expect(res.status).toBe(200)
     const json: AnalyticsResponse = await res.json()
 
-    // Volume should have entries for each day in range (zero-filled)
-    expect(json.volumeByDay.length).toBeGreaterThanOrEqual(7)
+    // Volume should have exactly 7 entries (zero-filled)
+    expect(json.volumeByDay.length).toBe(7)
     const todayEntry = json.volumeByDay.find((v) => v.date === today)
     expect(todayEntry?.count).toBe(3)
 
@@ -221,7 +223,9 @@ describe('GET /api/analytics', () => {
     mockGetUser.mockResolvedValue({ data: { user: { id: 'user-1' } } })
 
     // Only return data for today — all other days should be zero-filled
-    const today = new Date().toISOString().slice(0, 10)
+    const now = new Date()
+    const todayUTC = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()))
+    const today = todayUTC.toISOString().slice(0, 10)
     mockRpc.mockImplementation((fnName: string) => {
       if (fnName === 'get_volume_by_day') {
         return Promise.resolve({
@@ -236,8 +240,8 @@ describe('GET /api/analytics', () => {
     expect(res.status).toBe(200)
     const json: AnalyticsResponse = await res.json()
 
-    // Should have at least 7 days (today + 6 days back, plus possibly 1 more depending on timing)
-    expect(json.volumeByDay.length).toBeGreaterThanOrEqual(7)
+    // Should have exactly 7 days
+    expect(json.volumeByDay.length).toBe(7)
 
     // Today should have count 5
     const todayEntry = json.volumeByDay.find((v) => v.date === today)

@@ -47,18 +47,14 @@ function fillMissingDays(
   }
 
   const result: VolumeByDay[] = []
-  const sinceDate = new Date()
-  sinceDate.setDate(sinceDate.getDate() - range)
-  sinceDate.setHours(0, 0, 0, 0)
+  const now = new Date()
+  const today = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate())
 
-  const today = new Date()
-  today.setHours(0, 0, 0, 0)
-
-  const current = new Date(sinceDate)
-  while (current <= today) {
-    const dateStr = current.toISOString().slice(0, 10)
+  for (let i = range - 1; i >= 0; i--) {
+    const d = new Date(today)
+    d.setUTCDate(d.getUTCDate() - i)
+    const dateStr = d.toISOString().slice(0, 10)
     result.push({ date: dateStr, count: dayMap.get(dateStr) ?? 0 })
-    current.setDate(current.getDate() + 1)
   }
 
   return result
