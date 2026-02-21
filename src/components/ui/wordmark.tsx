@@ -9,7 +9,7 @@ const sizeClasses: Record<NonNullable<WordmarkProps['size']>, string> = {
   lg: 'text-3xl',
 }
 
-export function Wordmark({ size = 'md', className }: WordmarkProps): React.JSX.Element {
+export function Wordmark({ size = 'md', className }: WordmarkProps) {
   return (
     <span className={`font-mono ${sizeClasses[size]}${className ? ` ${className}` : ''}`}>
       <span className="font-normal text-gray-400">web</span>
