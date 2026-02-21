@@ -21,6 +21,7 @@ describe('Sidebar', () => {
     render(<Sidebar />)
     expect(getFirst('Dashboard')).toBeInTheDocument()
     expect(getFirst('Endpoints')).toBeInTheDocument()
+    expect(getFirst('Analytics')).toBeInTheDocument()
     expect(getFirst('Settings')).toBeInTheDocument()
     expect(getFirst('Billing')).toBeInTheDocument()
   })

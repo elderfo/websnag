@@ -48,7 +48,8 @@ websnag/
 │       ├── 005_data_retention.sql   # Retention cleanup function + pg_cron schedule
 │       ├── 006_retention_alerting.sql  # RPC function to query pg_cron job run history
 │       ├── 007_cancel_at_period_end.sql  # Boolean column for pending cancellation tracking
-│       └── 008_audit_log.sql          # Audit log table + RLS for user-facing activity log
+│       ├── 008_audit_log.sql          # Audit log table + RLS for user-facing activity log
+│       └── 009_analytics_functions.sql  # Server-side SQL aggregation RPCs for analytics
 ├── src/
 │   ├── app/
 │   │   ├── layout.tsx           # Root layout with providers
@@ -67,10 +68,12 @@ websnag/
 │   │   │   │   └── [id]/
 │   │   │   │       ├── page.tsx    # Endpoint detail + request feed
 │   │   │   │       └── settings/page.tsx
+│   │   │   ├── analytics/page.tsx   # Analytics dashboard with usage charts (client component)
 │   │   │   ├── settings/page.tsx   # Account settings
 │   │   │   └── billing/page.tsx    # Stripe Customer Portal redirect
 │   │   └── api/
 │   │       ├── wh/[slug]/route.ts     # Webhook capture endpoint (THE critical path)
+│   │       ├── analytics/route.ts      # Analytics aggregation endpoint (volume, methods, top endpoints)
 │   │       ├── analyze/route.ts       # AI analysis endpoint
 │   │       ├── replay/route.ts        # Replay webhook to target URL
 │   │       ├── health/
@@ -97,6 +100,10 @@ websnag/
 │   │   │   ├── filter-bar.tsx       # Method, date, search filters
 │   │   │   ├── bulk-actions.tsx     # Bulk select, delete, export bar
 │   │   ├── analysis/            # AI analysis display, code snippets
+│   │   ├── analytics/           # Analytics charts (SVG-based, no chart library)
+│   │   │   ├── volume-chart.tsx     # Bar chart for request volume over time
+│   │   │   ├── method-chart.tsx     # Horizontal bars for HTTP method breakdown
+│   │   │   └── top-endpoints.tsx    # Ranked list with proportional bars
 │   │   ├── settings/            # Settings-specific components
 │   │   │   └── audit-log.tsx        # Activity log table (client component)
 │   │   ├── onboarding/          # Onboarding experience components
