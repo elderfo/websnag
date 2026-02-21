@@ -1,10 +1,12 @@
+import { Wordmark } from '@/components/ui/wordmark'
+
 export function Footer() {
   return (
     <footer className="border-t border-border px-6 py-12">
       <div className="mx-auto max-w-5xl">
         <div className="flex flex-col items-center justify-between gap-6 sm:flex-row">
           <div>
-            <p className="font-mono text-sm font-semibold text-text-primary">websnag</p>
+            <Wordmark size="sm" />
             <p className="mt-1 text-sm text-text-muted">Built by developers, for developers.</p>
           </div>
 

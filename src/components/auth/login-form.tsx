@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
+import { Wordmark } from '@/components/ui/wordmark'
 
 export function LoginForm() {
   const [email, setEmail] = useState('')
@@ -61,7 +62,7 @@ export function LoginForm() {
       <div className="rounded-lg border border-[#1f1f23] bg-[#111113] p-8">
         {/* Branding */}
         <div className="mb-6 text-center">
-          <h1 className="text-2xl font-bold text-white">Websnag</h1>
+          <Wordmark size="lg" className="block" />
           <p className="mt-1 text-sm text-gray-400">Sign in to your account</p>
         </div>
 
