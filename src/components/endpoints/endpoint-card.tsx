@@ -18,14 +18,14 @@ export function EndpointCard({ endpoint }: EndpointCardProps) {
 
   return (
     <Card className="flex flex-col gap-3">
-      <div className="flex items-start justify-between gap-2">
+      <div className="flex items-start justify-between gap-2 min-w-0">
         <Link
           href={`/endpoints/${endpoint.id}`}
-          className="text-base font-semibold text-text-primary hover:text-accent transition-colors"
+          className="truncate min-w-0 text-base font-semibold text-text-primary hover:text-accent transition-colors"
         >
           {endpoint.name}
         </Link>
-        <Badge variant={endpoint.is_active ? 'success' : 'warning'}>
+        <Badge variant={endpoint.is_active ? 'success' : 'warning'} className="shrink-0">
           {endpoint.is_active ? 'Active' : 'Paused'}
         </Badge>
       </div>
@@ -34,11 +34,11 @@ export function EndpointCard({ endpoint }: EndpointCardProps) {
         <p className="text-sm text-text-secondary line-clamp-2">{endpoint.description}</p>
       )}
 
-      <div className="flex items-center gap-2">
-        <code className="flex-1 truncate rounded bg-background px-2 py-1 font-mono text-xs text-text-muted">
+      <div className="flex items-center gap-2 min-w-0">
+        <code className="flex-1 truncate rounded bg-background px-2 py-1 font-mono text-xs text-text-muted min-w-0">
           {webhookUrl}
         </code>
-        <CopyButton text={webhookUrl} label="Copy" />
+        <CopyButton text={webhookUrl} label="Copy" className="shrink-0" />
       </div>
 
       <div className="flex items-center justify-end pt-1">

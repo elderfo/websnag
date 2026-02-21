@@ -10,7 +10,7 @@ export function RefreshButton() {
       type="button"
       onClick={() => router.refresh()}
       aria-label="Refresh"
-      className="inline-flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-medium text-text-secondary transition-colors hover:bg-white/5 hover:text-text-primary"
+      className="inline-flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-medium text-text-secondary transition-colors hover:bg-white/5 hover:text-text-primary min-h-[44px]"
     >
       <svg
         xmlns="http://www.w3.org/2000/svg"

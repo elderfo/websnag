@@ -18,7 +18,11 @@ interface RequestDetailProps {
   onDelete?: (id: string) => void
 }
 
-export function RequestDetail({ request: initialRequest, endpointUrl, onDelete }: RequestDetailProps) {
+export function RequestDetail({
+  request: initialRequest,
+  endpointUrl,
+  onDelete,
+}: RequestDetailProps) {
   const [request, setRequest] = useState(initialRequest)
   const [activeTab, setActiveTab] = useState<Tab>('body')
 
@@ -50,7 +54,7 @@ export function RequestDetail({ request: initialRequest, endpointUrl, onDelete }
           <button
             type="button"
             onClick={() => onDelete(request.id)}
-            className="ml-2 text-xs text-red-400 hover:text-red-300 transition-colors"
+            className="ml-2 min-h-[44px] px-2 text-xs text-red-400 hover:text-red-300 transition-colors"
             title="Delete request"
           >
             Delete
@@ -59,7 +63,7 @@ export function RequestDetail({ request: initialRequest, endpointUrl, onDelete }
       </div>
 
       {/* Tabs */}
-      <div className="flex border-b border-border" role="tablist">
+      <div className="flex overflow-x-auto border-b border-border" role="tablist">
         {tabs.map((tab) => (
           <button
             key={tab.id}
@@ -67,7 +71,7 @@ export function RequestDetail({ request: initialRequest, endpointUrl, onDelete }
             role="tab"
             aria-selected={activeTab === tab.id}
             onClick={() => setActiveTab(tab.id)}
-            className={`px-4 py-2.5 text-sm font-medium transition-colors ${
+            className={`shrink-0 whitespace-nowrap px-4 min-h-[44px] text-sm font-medium transition-colors ${
               activeTab === tab.id
                 ? 'text-text-primary border-b-2 border-accent'
                 : 'text-text-secondary hover:text-text-primary'
