@@ -13,3 +13,33 @@ export function isSafeRedirectPath(path: string): boolean {
   if (path.includes('\r') || path.includes('\n')) return false
   return true
 }
+
+/**
+ * Set of lowercase header names that must never appear in user-configured
+ * webhook endpoint responses. These headers can be exploited for session
+ * hijacking, open redirects, CORS bypass, or transport-level attacks.
+ */
+export const FORBIDDEN_RESPONSE_HEADERS: Set<string> = new Set([
+  'set-cookie',
+  'location',
+  'access-control-allow-origin',
+  'access-control-allow-credentials',
+  'access-control-allow-headers',
+  'access-control-allow-methods',
+  'content-security-policy',
+  'strict-transport-security',
+  'x-frame-options',
+  'www-authenticate',
+  'proxy-authenticate',
+  'transfer-encoding',
+  'connection',
+  'upgrade',
+])
+
+/**
+ * Returns true if the given header name is allowed in user-configured
+ * webhook responses (i.e. it is NOT in the forbidden set).
+ */
+export function isAllowedResponseHeader(name: string): boolean {
+  return !FORBIDDEN_RESPONSE_HEADERS.has(name.toLowerCase())
+}
