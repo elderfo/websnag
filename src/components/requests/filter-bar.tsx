@@ -39,7 +39,7 @@ export function FilterBar({ filters, onFiltersChange }: FilterBarProps) {
       <select
         value={filters.method ?? ''}
         onChange={(e) => onFiltersChange({ ...filters, method: e.target.value || undefined })}
-        className="rounded-md border border-border bg-background px-3 py-1.5 text-sm text-text-primary"
+        className="rounded-md border border-border bg-background px-3 py-1.5 text-sm text-text-primary min-h-[44px]"
         aria-label="Filter by method"
       >
         <option value="">All methods</option>
@@ -60,7 +60,7 @@ export function FilterBar({ filters, onFiltersChange }: FilterBarProps) {
             dateFrom: e.target.value ? new Date(e.target.value).toISOString() : undefined,
           })
         }
-        className="rounded-md border border-border bg-background px-3 py-1.5 text-sm text-text-primary"
+        className="rounded-md border border-border bg-background px-3 py-1.5 text-sm text-text-primary min-h-[44px]"
         aria-label="From date"
         placeholder="From"
       />
@@ -75,7 +75,7 @@ export function FilterBar({ filters, onFiltersChange }: FilterBarProps) {
             dateTo: e.target.value ? new Date(e.target.value).toISOString() : undefined,
           })
         }
-        className="rounded-md border border-border bg-background px-3 py-1.5 text-sm text-text-primary"
+        className="rounded-md border border-border bg-background px-3 py-1.5 text-sm text-text-primary min-h-[44px]"
         aria-label="To date"
         placeholder="To"
       />
@@ -86,7 +86,7 @@ export function FilterBar({ filters, onFiltersChange }: FilterBarProps) {
         value={searchInput}
         onChange={(e) => setSearchInput(e.target.value)}
         placeholder="Search body content..."
-        className="flex-1 min-w-[200px] rounded-md border border-border bg-background px-3 py-1.5 text-sm text-text-primary placeholder-text-muted"
+        className="flex-1 min-w-[200px] rounded-md border border-border bg-background px-3 py-1.5 text-sm text-text-primary placeholder-text-muted min-h-[44px]"
         aria-label="Search requests"
       />
 
@@ -98,7 +98,7 @@ export function FilterBar({ filters, onFiltersChange }: FilterBarProps) {
             setSearchInput('')
             onFiltersChange({})
           }}
-          className="text-xs text-text-muted hover:text-text-primary transition-colors"
+          className="text-xs text-text-muted hover:text-text-primary transition-colors min-h-[44px] px-2"
         >
           Clear filters
         </button>
