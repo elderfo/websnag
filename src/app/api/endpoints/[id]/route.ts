@@ -143,6 +143,14 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
 
   log.info({ endpointId: id, fields: Object.keys(updateData) }, 'endpoint updated')
 
+  logAuditEvent({
+    userId: user.id,
+    action: 'update',
+    resourceType: 'endpoint',
+    resourceId: id,
+    metadata: { updatedFields: Object.keys(updateData) },
+  })
+
   return NextResponse.json(updated)
 }
 

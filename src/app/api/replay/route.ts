@@ -134,7 +134,13 @@ export async function POST(req: Request) {
         action: 'replay',
         resourceType: 'request',
         resourceId: requestId,
-        metadata: { targetUrl: targetUrl.substring(0, 50), responseStatus: response.status },
+        metadata: {
+          targetUrl: (() => {
+            const parsed = new URL(targetUrl)
+            return `${parsed.hostname}${parsed.pathname}`.substring(0, 50)
+          })(),
+          responseStatus: response.status,
+        },
       })
 
       return NextResponse.json({
