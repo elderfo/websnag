@@ -318,4 +318,39 @@ describe('GET /api/requests/export', () => {
       ilikeCalls.some(([field, val]) => field === 'body' && val === '%test-search-term%')
     ).toBe(true)
   })
+
+  it('escapes LIKE metacharacters in the search filter', async () => {
+    mockGetUser.mockResolvedValue({ data: { user: { id: 'user-1' } } })
+
+    const queryChain: Record<string, unknown> = {}
+    const chainFn = vi.fn().mockReturnValue(queryChain)
+    queryChain['eq'] = vi.fn().mockReturnValue(queryChain)
+    queryChain['order'] = vi.fn().mockReturnValue(queryChain)
+    queryChain['limit'] = vi.fn().mockReturnValue(queryChain)
+    queryChain['gte'] = vi.fn().mockReturnValue(queryChain)
+    queryChain['lte'] = vi.fn().mockReturnValue(queryChain)
+    queryChain['ilike'] = vi.fn().mockReturnValue(queryChain)
+    queryChain['then'] = (resolve: (v: unknown) => unknown, reject?: (e: unknown) => unknown) =>
+      Promise.resolve({ data: fakeRequests, error: null }).then(resolve, reject)
+
+    mockFrom
+      .mockReturnValueOnce({
+        select: vi.fn().mockReturnValue({
+          eq: vi.fn().mockReturnValue({
+            eq: vi.fn().mockReturnValue({
+              single: vi.fn().mockResolvedValue({ data: { id: 'ep-1' }, error: null }),
+            }),
+          }),
+        }),
+      })
+      .mockReturnValueOnce({ select: chainFn })
+
+    const res = await GET(makeRequest({ endpointId: 'ep-1', search: '100%_match\\test' }))
+    expect(res.status).toBe(200)
+
+    const ilikeCalls = (queryChain['ilike'] as ReturnType<typeof vi.fn>).mock.calls
+    expect(
+      ilikeCalls.some(([field, val]) => field === 'body' && val === '%100\\%\\_match\\\\test%')
+    ).toBe(true)
+  })
 })

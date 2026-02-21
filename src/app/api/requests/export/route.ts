@@ -1,6 +1,7 @@
 import { z } from 'zod'
 import { createClient } from '@/lib/supabase/server'
 import { createRequestLogger } from '@/lib/logger'
+import { escapeLikePattern } from '@/lib/security'
 import { NextResponse, type NextRequest } from 'next/server'
 
 const VALID_METHODS = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS'] as const
@@ -79,7 +80,7 @@ export async function GET(req: NextRequest) {
   }
 
   if (search) {
-    query = query.ilike('body', `%${search}%`)
+    query = query.ilike('body', `%${escapeLikePattern(search)}%`)
   }
 
   const { data: requests, error } = await query
