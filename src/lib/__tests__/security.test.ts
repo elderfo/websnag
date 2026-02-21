@@ -4,6 +4,7 @@ import {
   FORBIDDEN_RESPONSE_HEADERS,
   isAllowedResponseHeader,
   escapeLikePattern,
+  isValidOrigin,
 } from '@/lib/security'
 
 describe('isSafeRedirectPath', () => {
@@ -151,5 +152,56 @@ describe('escapeLikePattern', () => {
 
   it('handles strings with no special characters', () => {
     expect(escapeLikePattern('abc def 123')).toBe('abc def 123')
+  })
+})
+
+describe('isValidOrigin', () => {
+  const appUrl = 'http://localhost:3000'
+
+  it('returns true when origin is null (non-browser clients)', () => {
+    expect(isValidOrigin(null, appUrl)).toBe(true)
+  })
+
+  it('returns false when origin is empty string', () => {
+    expect(isValidOrigin('', appUrl)).toBe(false)
+  })
+
+  it('returns true when origin matches the appUrl origin', () => {
+    expect(isValidOrigin('http://localhost:3000', appUrl)).toBe(true)
+  })
+
+  it('returns false when origin does not match', () => {
+    expect(isValidOrigin('http://evil.com', appUrl)).toBe(false)
+    expect(isValidOrigin('https://localhost:3000', appUrl)).toBe(false)
+    expect(isValidOrigin('http://localhost:4000', appUrl)).toBe(false)
+  })
+
+  it('handles trailing slashes on appUrl', () => {
+    expect(isValidOrigin('http://localhost:3000', 'http://localhost:3000/')).toBe(true)
+  })
+
+  it('handles trailing slashes on origin', () => {
+    expect(isValidOrigin('http://localhost:3000/', appUrl)).toBe(true)
+  })
+
+  it('handles appUrl with a path', () => {
+    expect(isValidOrigin('https://websnag.dev', 'https://websnag.dev/dashboard')).toBe(true)
+  })
+
+  it('works with production-style HTTPS URLs', () => {
+    const prodUrl = 'https://websnag.dev'
+    expect(isValidOrigin('https://websnag.dev', prodUrl)).toBe(true)
+    expect(isValidOrigin('http://websnag.dev', prodUrl)).toBe(false)
+    expect(isValidOrigin('https://evil.websnag.dev', prodUrl)).toBe(false)
+  })
+
+  it('rejects origin with different port', () => {
+    expect(isValidOrigin('http://localhost:3001', appUrl)).toBe(false)
+  })
+
+  it('rejects origin with path appended', () => {
+    // Origin header never contains a path, but if someone sends a crafted
+    // one we should still compare correctly
+    expect(isValidOrigin('http://localhost:3000/evil', appUrl)).toBe(true)
   })
 })

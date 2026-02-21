@@ -51,3 +51,22 @@ export function isAllowedResponseHeader(name: string): boolean {
 export function escapeLikePattern(pattern: string): string {
   return pattern.replace(/[\\%_]/g, (char) => `\\${char}`)
 }
+
+/**
+ * Validates that a request's Origin header matches the application URL.
+ * Returns true if the origin is null (non-browser clients don't send Origin),
+ * false if the origin is an empty string, and otherwise compares the origin
+ * portion (scheme + host + port) of both values.
+ */
+export function isValidOrigin(origin: string | null, appUrl: string): boolean {
+  if (origin === null) return true
+  if (origin === '') return false
+
+  try {
+    const originUrl = new URL(origin)
+    const appUrlParsed = new URL(appUrl)
+    return originUrl.origin === appUrlParsed.origin
+  } catch {
+    return false
+  }
+}
