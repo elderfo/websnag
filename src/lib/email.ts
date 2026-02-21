@@ -1,7 +1,5 @@
 import { createLogger } from '@/lib/logger'
 
-// TODO: Connect to Resend when RESEND_API_KEY is configured
-
 const log = createLogger('email')
 
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? 'https://websnag.dev'
