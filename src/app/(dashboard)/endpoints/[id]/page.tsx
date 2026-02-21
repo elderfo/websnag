@@ -3,6 +3,7 @@ import { notFound } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { Badge } from '@/components/ui/badge'
 import { CopyButton } from '@/components/ui/copy-button'
+import { CodeSnippets } from '@/components/endpoints/code-snippets'
 import { RequestFeed } from '@/components/requests/request-feed'
 import type { Endpoint } from '@/types'
 
@@ -87,19 +88,8 @@ export default async function EndpointDetailPage({ params }: EndpointDetailPageP
             </p>
           </div>
 
-          <div className="mt-4 rounded-lg border border-border bg-surface p-4">
-            <p className="mb-2 text-xs font-medium uppercase tracking-wider text-text-muted">
-              cURL Example
-            </p>
-            <div className="flex items-center gap-3">
-              <code className="flex-1 truncate rounded bg-background px-3 py-2 font-mono text-xs text-text-secondary">
-                {`curl -X POST ${webhookUrl} -H "Content-Type: application/json" -d '{"test": true}'`}
-              </code>
-              <CopyButton
-                text={`curl -X POST ${webhookUrl} -H "Content-Type: application/json" -d '{"test": true}'`}
-                label="Copy"
-              />
-            </div>
+          <div className="mt-4">
+            <CodeSnippets endpointUrl={webhookUrl} />
           </div>
 
           <div className="mt-8">

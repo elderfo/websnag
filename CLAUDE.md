@@ -91,6 +91,7 @@ websnag/
 │   │   │   ├── wordmark.tsx         # Two-tone "websnag" brand wordmark (web=gray, snag=green)
 │   │   ├── layout/              # Header, Sidebar, Nav
 │   │   ├── endpoints/           # Endpoint-specific components
+│   │   │   ├── code-snippets.tsx    # Multi-language webhook request examples (collapsible)
 │   │   ├── requests/            # Request feed, detail view, filters
 │   │   │   ├── filter-bar.tsx       # Method, date, search filters
 │   │   │   ├── bulk-actions.tsx     # Bulk select, delete, export bar

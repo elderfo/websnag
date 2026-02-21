@@ -35,6 +35,12 @@ vi.mock('@/components/ui/copy-button', () => ({
   CopyButton: ({ label }: { label: string }) => <button>{label}</button>,
 }))
 
+vi.mock('@/components/endpoints/code-snippets', () => ({
+  CodeSnippets: ({ endpointUrl }: { endpointUrl: string }) => (
+    <div data-testid="code-snippets">{endpointUrl}</div>
+  ),
+}))
+
 vi.mock('@/components/requests/request-feed', () => ({
   RequestFeed: ({ endpointUrl }: { endpointId: string; endpointUrl: string }) => (
     <div data-testid="request-feed">{endpointUrl}</div>
@@ -155,12 +161,11 @@ describe('EndpointDetailPage', () => {
     )
   })
 
-  it('renders cURL example with the namespaced URL', async () => {
+  it('renders code snippets component with the namespaced URL', async () => {
     const Page = await EndpointDetailPage({ params: Promise.resolve({ id: 'ep-1' }) })
     render(Page)
-    expect(
-      screen.getByText(/curl -X POST http:\/\/localhost:3000\/api\/wh\/testuser\/my-webhook-slug/)
-    ).toBeInTheDocument()
+    const snippets = screen.getByTestId('code-snippets')
+    expect(snippets).toHaveTextContent('http://localhost:3000/api/wh/testuser/my-webhook-slug')
   })
 
   it('renders a settings link pointing to the endpoint settings page', async () => {
@@ -216,10 +221,10 @@ describe('EndpointDetailPage', () => {
       expect(screen.queryByText('Webhook URL')).not.toBeInTheDocument()
     })
 
-    it('does not render the cURL Example panel', async () => {
+    it('does not render the code snippets section', async () => {
       const Page = await EndpointDetailPage({ params: Promise.resolve({ id: 'ep-1' }) })
       render(Page)
-      expect(screen.queryByText('cURL Example')).not.toBeInTheDocument()
+      expect(screen.queryByTestId('code-snippets')).not.toBeInTheDocument()
     })
 
     it('does not render RequestFeed', async () => {
