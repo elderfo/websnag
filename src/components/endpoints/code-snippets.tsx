@@ -41,7 +41,6 @@ function getSnippet(language: Language, url: string): string {
         'response = requests.post(',
         `    "${url}",`,
         '    json={"event": "test", "data": {"id": 123}},',
-        '    headers={"Content-Type": "application/json"},',
         ')',
         '',
         'print(response.status_code)',
