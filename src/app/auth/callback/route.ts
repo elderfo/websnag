@@ -1,6 +1,9 @@
 import { createClient } from '@/lib/supabase/server'
+import { createLogger } from '@/lib/logger'
 import { sendWelcomeEmail } from '@/lib/email'
 import { NextResponse } from 'next/server'
+
+const log = createLogger('auth-callback')
 
 export async function GET(request: Request) {
   const { searchParams, origin } = new URL(request.url)
@@ -17,14 +20,19 @@ export async function GET(request: Request) {
       } = await supabase.auth.getUser()
 
       if (user) {
-        const { data: profile } = await supabase
+        const { data: profile, error: profileError } = await supabase
           .from('profiles')
           .select('username')
           .eq('id', user.id)
           .maybeSingle()
 
+        if (profileError) {
+          log.error({ err: profileError, userId: user.id }, 'failed to query profile')
+          // Don't treat as new user — skip welcome email and fall through to redirect
+        }
+
         // New user (no profile row yet) — create profile and send welcome email
-        if (!profile) {
+        if (!profile && !profileError) {
           // Create profile row to prevent duplicate welcome emails on re-login
           const { error: insertError } = await supabase.from('profiles').insert({ id: user.id })
 

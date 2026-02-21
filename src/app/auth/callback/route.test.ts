@@ -5,6 +5,15 @@ const mockExchangeCodeForSession = vi.fn()
 const mockGetUser = vi.fn()
 const mockMaybeSingle = vi.fn()
 
+vi.mock('@/lib/logger', () => ({
+  createLogger: () => ({
+    info: vi.fn(),
+    debug: vi.fn(),
+    error: vi.fn(),
+    warn: vi.fn(),
+  }),
+}))
+
 vi.mock('@/lib/supabase/server', () => ({
   createClient: vi.fn().mockResolvedValue({
     auth: {
