@@ -94,7 +94,10 @@ function buildWelcomeEmailHtml(username?: string): string {
  */
 export async function sendWelcomeEmail(email: string, username?: string): Promise<void> {
   const apiKey = process.env.RESEND_API_KEY
-  const fromAddress = process.env.ALERT_EMAIL_FROM ?? 'welcome@websnag.dev'
+  const fromAddress =
+    process.env.WELCOME_EMAIL_FROM ??
+    process.env.ALERT_EMAIL_FROM ??
+    'Websnag <welcome@websnag.dev>'
 
   const subject = 'Welcome to Websnag — your webhook debugger is ready'
   const text = buildWelcomeEmailText(username)
