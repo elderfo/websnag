@@ -330,3 +330,5 @@ $RECYCLE.BIN/
 docs/plans/
 
 # End of https://www.toptal.com/developers/gitignore/api/python,visualstudiocode,react,nextjs,macos,windows,linux
+
+.work/
