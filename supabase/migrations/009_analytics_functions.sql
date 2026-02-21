@@ -45,6 +45,8 @@ BEGIN
     RAISE EXCEPTION 'unauthorized';
   END IF;
 
+  p_limit := LEAST(GREATEST(p_limit, 1), 50);
+
   RETURN QUERY
   SELECT e.id AS endpoint_id, e.name AS endpoint_name, e.slug AS endpoint_slug, COUNT(*) AS count
   FROM requests r
