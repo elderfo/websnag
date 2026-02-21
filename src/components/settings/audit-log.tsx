@@ -11,6 +11,7 @@ const PAGE_SIZE = 50
 
 const ACTION_LABELS: Record<string, string> = {
   create: 'Created',
+  update: 'Updated',
   delete: 'Deleted',
   analyze: 'Analyzed',
   replay: 'Replayed',
@@ -27,6 +28,8 @@ function actionBadgeVariant(action: string): 'success' | 'error' | 'info' | 'war
   switch (action) {
     case 'create':
       return 'success'
+    case 'update':
+      return 'info'
     case 'delete':
       return 'error'
     case 'analyze':
