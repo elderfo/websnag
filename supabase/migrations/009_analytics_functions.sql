@@ -5,6 +5,10 @@
 CREATE OR REPLACE FUNCTION get_volume_by_day(p_user_id UUID, p_days INT)
 RETURNS TABLE (day DATE, count BIGINT) AS $$
 BEGIN
+  IF p_user_id != auth.uid() THEN
+    RAISE EXCEPTION 'unauthorized';
+  END IF;
+
   RETURN QUERY
   SELECT DATE(r.received_at) AS day, COUNT(*) AS count
   FROM requests r
@@ -19,6 +23,10 @@ $$ LANGUAGE plpgsql SECURITY DEFINER;
 CREATE OR REPLACE FUNCTION get_method_breakdown(p_user_id UUID, p_days INT)
 RETURNS TABLE (method TEXT, count BIGINT) AS $$
 BEGIN
+  IF p_user_id != auth.uid() THEN
+    RAISE EXCEPTION 'unauthorized';
+  END IF;
+
   RETURN QUERY
   SELECT r.method, COUNT(*) AS count
   FROM requests r
@@ -33,6 +41,10 @@ $$ LANGUAGE plpgsql SECURITY DEFINER;
 CREATE OR REPLACE FUNCTION get_top_endpoints(p_user_id UUID, p_days INT, p_limit INT DEFAULT 5)
 RETURNS TABLE (endpoint_id UUID, endpoint_name TEXT, endpoint_slug TEXT, count BIGINT) AS $$
 BEGIN
+  IF p_user_id != auth.uid() THEN
+    RAISE EXCEPTION 'unauthorized';
+  END IF;
+
   RETURN QUERY
   SELECT e.id AS endpoint_id, e.name AS endpoint_name, e.slug AS endpoint_slug, COUNT(*) AS count
   FROM requests r
