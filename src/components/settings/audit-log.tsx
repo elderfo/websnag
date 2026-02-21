@@ -59,6 +59,11 @@ function formatDetails(entry: AuditLogEntry): string {
     if (meta.status) parts.push(`status: ${String(meta.status)}`)
     if (meta.cancelAtPeriodEnd !== undefined)
       parts.push(`cancelAtPeriodEnd: ${String(meta.cancelAtPeriodEnd)}`)
+    if (meta.outcome) parts.push(`outcome: ${String(meta.outcome)}`)
+    if (meta.responseStatus) parts.push(`response: ${String(meta.responseStatus)}`)
+    if (meta.error) parts.push(`error: ${String(meta.error)}`)
+    if (Array.isArray(meta.updatedFields) && meta.updatedFields.length > 0)
+      parts.push(`updated: ${meta.updatedFields.map(String).join(', ')}`)
   }
 
   return parts.join(', ')
