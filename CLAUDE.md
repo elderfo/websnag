@@ -59,10 +59,12 @@ websnag/
 │   │   │   │   └── [id]/
 │   │   │   │       ├── page.tsx    # Endpoint detail + request feed
 │   │   │   │       └── settings/page.tsx
+│   │   │   ├── analytics/page.tsx   # Analytics dashboard with usage charts (client component)
 │   │   │   ├── settings/page.tsx   # Account settings
 │   │   │   └── billing/page.tsx    # Stripe Customer Portal redirect
 │   │   └── api/
 │   │       ├── wh/[slug]/route.ts     # Webhook capture endpoint (THE critical path)
+│   │       ├── analytics/route.ts      # Analytics aggregation endpoint (volume, methods, top endpoints)
 │   │       ├── analyze/route.ts       # AI analysis endpoint
 │   │       ├── replay/route.ts        # Replay webhook to target URL
 │   │       ├── health/
@@ -87,6 +89,10 @@ websnag/
 │   │   │   ├── filter-bar.tsx       # Method, date, search filters
 │   │   │   ├── bulk-actions.tsx     # Bulk select, delete, export bar
 │   │   ├── analysis/            # AI analysis display, code snippets
+│   │   ├── analytics/           # Analytics charts (SVG-based, no chart library)
+│   │   │   ├── volume-chart.tsx     # Bar chart for request volume over time
+│   │   │   ├── method-chart.tsx     # Horizontal bars for HTTP method breakdown
+│   │   │   └── top-endpoints.tsx    # Ranked list with proportional bars
 │   │   └── billing/             # Upgrade prompts, usage display
 │   ├── lib/
 │   │   ├── supabase/
