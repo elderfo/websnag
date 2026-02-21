@@ -83,6 +83,7 @@ websnag/
 │   ├── components/
 │   │   ├── ui/                  # Reusable UI primitives (button, input, card, badge, etc.)
 │   │   │   ├── confirm-dialog.tsx   # Generic confirmation modal
+│   │   │   ├── wordmark.tsx         # Two-tone "websnag" brand wordmark (web=gray, snag=green)
 │   │   ├── layout/              # Header, Sidebar, Nav
 │   │   ├── endpoints/           # Endpoint-specific components
 │   │   ├── requests/            # Request feed, detail view, filters

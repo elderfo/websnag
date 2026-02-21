@@ -1,6 +1,7 @@
 'use client'
 
 import { UserMenu } from '@/components/layout/user-menu'
+import { Wordmark } from '@/components/ui/wordmark'
 import type { Plan } from '@/types'
 
 interface HeaderProps {
@@ -15,7 +16,9 @@ export function Header({ userEmail, plan, mobileNav }: HeaderProps) {
       <div className="flex items-center gap-2">
         {mobileNav}
         {/* Mobile logo — visible only when sidebar is hidden */}
-        <span className="font-mono text-lg font-bold text-accent lg:hidden">websnag</span>
+        <span className="lg:hidden">
+          <Wordmark size="md" />
+        </span>
       </div>
       <UserMenu email={userEmail} plan={plan} />
     </header>

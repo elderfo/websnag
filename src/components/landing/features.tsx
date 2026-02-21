@@ -89,7 +89,7 @@ export function Features() {
           Everything you need to debug webhooks
         </h2>
         <p className="mx-auto mt-4 max-w-2xl text-center text-text-secondary">
-          Stop guessing what your webhooks contain. Capture, inspect, and understand every payload.
+          Catch every webhook. Understand every payload.
         </p>
 
         <div className="mt-16 grid gap-6 sm:grid-cols-2">

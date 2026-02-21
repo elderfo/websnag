@@ -14,11 +14,10 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   title: 'Websnag — AI-Powered Webhook Debugger',
-  description:
-    'Capture, inspect, and analyze webhook payloads in real-time. AI-powered debugging for developers who ship fast.',
+  description: 'Your webhooks, decoded.',
   openGraph: {
     title: 'Websnag — AI-Powered Webhook Debugger',
-    description: 'See what your webhooks are really saying.',
+    description: 'Your webhooks, decoded.',
     url: 'https://websnag.dev',
     siteName: 'Websnag',
     type: 'website',
@@ -26,7 +25,7 @@ export const metadata: Metadata = {
   twitter: {
     card: 'summary_large_image',
     title: 'Websnag — AI-Powered Webhook Debugger',
-    description: 'See what your webhooks are really saying.',
+    description: 'Your webhooks, decoded.',
   },
 }
 

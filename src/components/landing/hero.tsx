@@ -1,4 +1,5 @@
 import Link from 'next/link'
+import { Wordmark } from '@/components/ui/wordmark'
 
 export function Hero() {
   return (
@@ -13,13 +14,14 @@ export function Hero() {
       />
 
       <div className="relative mx-auto max-w-4xl text-center">
+        <Wordmark size="lg" className="mb-6 block" />
+
         <h1 className="bg-gradient-to-b from-text-primary to-text-secondary bg-clip-text text-5xl font-bold tracking-tight text-transparent sm:text-6xl lg:text-7xl">
           See what your webhooks are really saying.
         </h1>
 
         <p className="mx-auto mt-6 max-w-2xl text-lg leading-relaxed text-text-secondary sm:text-xl">
-          Websnag captures, inspects, and analyzes webhook payloads in real-time. AI-powered
-          debugging for developers who ship fast.
+          Catch every webhook. Understand every payload.
         </p>
 
         <div className="mt-10 flex items-center justify-center gap-4">
