@@ -37,6 +37,13 @@ class InMemoryRateLimiter {
     const entry = this.windows.get(key)
 
     if (!entry || now >= entry.resetAt) {
+      // Lazy cleanup: purge expired entries periodically to prevent unbounded growth
+      if (this.windows.size > 1000) {
+        for (const [k, v] of this.windows) {
+          if (now >= v.resetAt) this.windows.delete(k)
+        }
+      }
+
       this.windows.set(key, { count: 1, resetAt: now + this.windowMs })
       return {
         success: true,
