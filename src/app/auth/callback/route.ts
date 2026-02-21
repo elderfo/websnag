@@ -1,4 +1,5 @@
 import { createClient } from '@/lib/supabase/server'
+import { sendWelcomeEmail } from '@/lib/email'
 import { NextResponse } from 'next/server'
 
 export async function GET(request: Request) {
@@ -21,6 +22,15 @@ export async function GET(request: Request) {
           .select('username')
           .eq('id', user.id)
           .maybeSingle()
+
+        // New user (no profile row yet) — send welcome email in the background
+        if (!profile) {
+          const email = user.email ?? user.user_metadata?.email
+          if (email) {
+            // Fire-and-forget: don't block the auth redirect
+            void sendWelcomeEmail(email)
+          }
+        }
 
         if (!profile?.username) {
           const redirectParam = `&redirect=${encodeURIComponent(next)}`
