@@ -3,15 +3,7 @@
 import { useState } from 'react'
 import { CopyButton } from '@/components/ui/copy-button'
 
-type Language =
-  | 'shell'
-  | 'python'
-  | 'javascript'
-  | 'go'
-  | 'ruby'
-  | 'php'
-  | 'java'
-  | 'csharp'
+type Language = 'shell' | 'python' | 'javascript' | 'go' | 'ruby' | 'php' | 'java' | 'csharp'
 
 interface CodeSnippetsProps {
   endpointUrl: string
@@ -39,7 +31,7 @@ function getSnippet(language: Language, url: string): string {
       return [
         `curl -X POST ${url} \\`,
         '  -H "Content-Type: application/json" \\',
-        "  -d '{\"event\": \"test\", \"data\": {\"id\": 123}}'",
+        '  -d \'{"event": "test", "data": {"id": 123}}\'',
       ].join('\n')
 
     case 'python':
@@ -239,9 +231,7 @@ export function CodeSnippets({ endpointUrl }: CodeSnippetsProps) {
             <polyline points="16 18 22 12 16 6" />
             <polyline points="8 6 2 12 8 18" />
           </svg>
-          <span className="text-sm font-medium text-text-primary">
-            Send a test webhook
-          </span>
+          <span className="text-sm font-medium text-text-primary">Send a test webhook</span>
         </div>
         <svg
           xmlns="http://www.w3.org/2000/svg"
