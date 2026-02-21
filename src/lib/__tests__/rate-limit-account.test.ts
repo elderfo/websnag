@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 
 const mockHget = vi.fn()
 const mockLimit = vi.fn()
@@ -33,13 +33,23 @@ async function freshImport() {
   return await import('@/lib/rate-limit')
 }
 
+const originalEnv = process.env
+
 beforeEach(() => {
   mockLimit.mockReset()
   mockHget.mockReset()
   mockSlidingWindow.mockClear()
 
-  process.env.UPSTASH_REDIS_REST_URL = 'https://fake.upstash.io'
-  process.env.UPSTASH_REDIS_REST_TOKEN = 'fake-token'
+  process.env = {
+    ...originalEnv,
+    UPSTASH_REDIS_REST_URL: 'https://fake.upstash.io',
+    UPSTASH_REDIS_REST_TOKEN: 'fake-token',
+  }
+})
+
+afterEach(() => {
+  process.env = originalEnv
+  vi.resetModules()
 })
 
 describe('checkAccountRateLimit', () => {
