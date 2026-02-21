@@ -2,6 +2,7 @@ import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { getUserPlan } from '@/lib/usage'
 import { SettingsClient } from './settings-client'
+import { AuditLog } from '@/components/settings/audit-log'
 
 interface SettingsPageProps {
   searchParams: Promise<{ setup?: string; redirect?: string }>
@@ -48,6 +49,8 @@ export default async function SettingsPage({ searchParams }: SettingsPageProps) 
         isSetup={params.setup === 'username'}
         redirectAfterSave={params.redirect ?? null}
       />
+
+      <AuditLog />
     </div>
   )
 }

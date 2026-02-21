@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
+import { usePathname } from 'next/navigation'
 import { Sidebar } from './sidebar'
 import type { Plan } from '@/types'
 
@@ -20,8 +21,20 @@ export function MobileNav({
   plan,
 }: MobileNavProps) {
   const [isOpen, setIsOpen] = useState(false)
+  const pathname = usePathname()
+  const [prevPathname, setPrevPathname] = useState(pathname)
 
   const close = useCallback(() => setIsOpen(false), [])
+
+  // Close on any client-side navigation (pathname change).
+  // Uses the "adjusting state during render" pattern recommended by React
+  // to avoid calling setState inside an effect.
+  if (prevPathname !== pathname) {
+    setPrevPathname(pathname)
+    if (isOpen) {
+      setIsOpen(false)
+    }
+  }
 
   // Close on any navigation (popstate) or when links are clicked inside the sidebar
   useEffect(() => {
@@ -49,7 +62,7 @@ export function MobileNav({
       {/* Hamburger button — visible only on mobile */}
       <button
         onClick={() => setIsOpen(true)}
-        className="flex h-10 w-10 items-center justify-center rounded-md text-text-secondary transition-colors hover:bg-white/5 hover:text-text-primary lg:hidden"
+        className="flex h-11 w-11 items-center justify-center rounded-md text-text-secondary transition-colors hover:bg-white/5 hover:text-text-primary lg:hidden"
         aria-label="Open navigation"
       >
         <svg
@@ -100,7 +113,7 @@ export function MobileNav({
         />
         <button
           onClick={close}
-          className="absolute right-2 top-3 flex h-8 w-8 items-center justify-center rounded-md text-text-muted transition-colors hover:bg-white/5 hover:text-text-primary"
+          className="absolute right-2 top-3 flex h-11 w-11 items-center justify-center rounded-md text-text-muted transition-colors hover:bg-white/5 hover:text-text-primary"
           aria-label="Close navigation"
         >
           <svg

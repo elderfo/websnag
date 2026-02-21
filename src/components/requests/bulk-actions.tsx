@@ -49,7 +49,7 @@ export function BulkActions({
         <button
           type="button"
           onClick={allSelected ? onClearSelection : onSelectAll}
-          className="text-xs text-accent hover:underline"
+          className="text-xs text-accent hover:underline min-h-[44px] px-2"
         >
           {allSelected ? 'Clear selection' : 'Select all on page'}
         </button>

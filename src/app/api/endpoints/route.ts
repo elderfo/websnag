@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { createRequestLogger } from '@/lib/logger'
+import { logAuditEvent } from '@/lib/audit'
 import { createEndpointSchema } from '@/lib/validators'
 import { canCreateEndpoint, getUserPlan } from '@/lib/usage'
 import { generateSlug, isValidCustomSlug } from '@/lib/utils'
@@ -174,6 +175,14 @@ export async function POST(request: Request) {
     }
 
     log.info({ endpointId: endpoint?.id, slug, userId: user.id }, 'endpoint created')
+
+    logAuditEvent({
+      userId: user.id,
+      action: 'create',
+      resourceType: 'endpoint',
+      resourceId: endpoint?.id,
+      metadata: { name: parsed.data.name, slug },
+    })
 
     return NextResponse.json(endpoint, { status: 201 })
   } catch (err) {

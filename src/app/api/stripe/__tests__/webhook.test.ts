@@ -24,6 +24,12 @@ vi.mock('@/lib/stripe', () => ({
 }))
 
 vi.mock('@/lib/logger', () => ({
+  createLogger: () => ({
+    info: vi.fn(),
+    error: vi.fn(),
+    warn: vi.fn(),
+    debug: vi.fn(),
+  }),
   createRequestLogger: () => ({
     info: vi.fn(),
     error: vi.fn(),
@@ -31,6 +37,10 @@ vi.mock('@/lib/logger', () => ({
     debug: vi.fn(),
     requestId: 'test-request-id',
   }),
+}))
+
+vi.mock('@/lib/audit', () => ({
+  logAuditEvent: vi.fn(),
 }))
 
 import { POST } from '../webhook/route'
@@ -52,7 +62,17 @@ function mockUpdateChain() {
   const updateMock = vi.fn().mockReturnValue({
     eq: eqMock,
   })
-  mockAdminFrom.mockReturnValue({ update: updateMock })
+
+  // resolveUserId calls: .from('subscriptions').select('user_id').eq(...).single()
+  const selectSingleMock = vi.fn().mockResolvedValue({ data: { user_id: 'user-resolved' } })
+  const selectEqMock = vi.fn().mockReturnValue({ single: selectSingleMock })
+  const selectMock = vi.fn().mockReturnValue({ eq: selectEqMock })
+
+  mockAdminFrom.mockImplementation(() => ({
+    update: updateMock,
+    select: selectMock,
+  }))
+
   return updateMock
 }
 

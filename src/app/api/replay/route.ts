@@ -1,5 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
 import { createRequestLogger } from '@/lib/logger'
+import { logAuditEvent } from '@/lib/audit'
 import { replayRequestSchema } from '@/lib/validators'
 import { getUserPlan } from '@/lib/usage'
 import { validateTargetUrl } from '@/lib/url-validator'
@@ -105,6 +106,15 @@ export async function POST(req: Request) {
     const controller = new AbortController()
     const timeoutId = setTimeout(() => controller.abort(), REPLAY_TIMEOUT)
 
+    const truncatedTargetUrl = (() => {
+      const parsed = new URL(targetUrl)
+      return `${parsed.hostname}${parsed.pathname}`.substring(0, 50)
+    })()
+
+    let replayOutcome: 'success' | 'timeout' | 'error' = 'success'
+    let replayResponseStatus: number | undefined
+    let replayErrorMessage: string | undefined
+
     try {
       const response = await fetch(fetchUrl.toString(), {
         method: webhookRequest.method,
@@ -128,6 +138,8 @@ export async function POST(req: Request) {
         responseHeaders[key] = value
       })
 
+      replayResponseStatus = response.status
+
       return NextResponse.json({
         status: response.status,
         headers: responseHeaders,
@@ -137,15 +149,32 @@ export async function POST(req: Request) {
       clearTimeout(timeoutId)
 
       if (error instanceof Error && error.name === 'AbortError') {
-        return NextResponse.json({ error: 'Request timed out after 10 seconds' }, { status: 504 })
+        replayOutcome = 'timeout'
+        replayErrorMessage = 'Request timed out after 10 seconds'
+        return NextResponse.json({ error: replayErrorMessage }, { status: 504 })
       }
 
+      replayOutcome = 'error'
+      replayErrorMessage = error instanceof Error ? error.message : 'Unknown error'
       return NextResponse.json(
         {
-          error: `Failed to reach target: ${error instanceof Error ? error.message : 'Unknown error'}`,
+          error: `Failed to reach target: ${replayErrorMessage}`,
         },
         { status: 502 }
       )
+    } finally {
+      logAuditEvent({
+        userId: user.id,
+        action: 'replay',
+        resourceType: 'request',
+        resourceId: requestId,
+        metadata: {
+          targetUrl: truncatedTargetUrl,
+          outcome: replayOutcome,
+          ...(replayResponseStatus !== undefined && { responseStatus: replayResponseStatus }),
+          ...(replayErrorMessage !== undefined && { error: replayErrorMessage }),
+        },
+      })
     }
   } catch (error) {
     log.error({ err: error }, 'replay failed')

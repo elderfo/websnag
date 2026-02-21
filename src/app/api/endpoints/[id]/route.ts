@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { createRequestLogger } from '@/lib/logger'
+import { logAuditEvent } from '@/lib/audit'
 import { updateEndpointSchema } from '@/lib/validators'
 import { getUserPlan } from '@/lib/usage'
 import { isValidCustomSlug } from '@/lib/utils'
@@ -142,6 +143,14 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
 
   log.info({ endpointId: id, fields: Object.keys(updateData) }, 'endpoint updated')
 
+  logAuditEvent({
+    userId: user.id,
+    action: 'update',
+    resourceType: 'endpoint',
+    resourceId: id,
+    metadata: { updatedFields: Object.keys(updateData) },
+  })
+
   return NextResponse.json(updated)
 }
 
@@ -173,6 +182,13 @@ export async function DELETE(
   }
 
   log.info({ endpointId: id }, 'endpoint deleted')
+
+  logAuditEvent({
+    userId: user.id,
+    action: 'delete',
+    resourceType: 'endpoint',
+    resourceId: id,
+  })
 
   return new NextResponse(null, { status: 204 })
 }

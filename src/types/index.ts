@@ -96,6 +96,19 @@ export const LIMITS: Record<Plan, TierLimits> = {
   },
 }
 
+// Audit log
+
+export interface AuditLogEntry {
+  id: string
+  user_id: string
+  action: string
+  resource_type: string
+  resource_id: string | null
+  metadata: Record<string, unknown>
+  ip_address: string | null
+  created_at: string
+}
+
 // Analytics types
 
 export interface VolumeByDay {

@@ -119,22 +119,32 @@ export function EndpointForm({ mode, endpoint, isPro = false }: EndpointFormProp
         </div>
       )}
 
-      <Input
-        label="Name"
-        placeholder="My Stripe Webhook"
-        value={name}
-        onChange={(e) => setName(e.target.value)}
-        error={errors.name}
-        required
-      />
+      <div>
+        <Input
+          label="Name"
+          placeholder="My Stripe Webhook"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          error={errors.name}
+          required
+        />
+        <p className="mt-1 text-xs text-text-muted">
+          A friendly name for this endpoint (e.g., &quot;Stripe Webhooks&quot;)
+        </p>
+      </div>
 
-      <Textarea
-        label="Description"
-        placeholder="Optional description for this endpoint"
-        value={description}
-        onChange={(e) => setDescription(e.target.value)}
-        rows={2}
-      />
+      <div>
+        <Textarea
+          label="Description"
+          placeholder="Optional description for this endpoint"
+          value={description}
+          onChange={(e) => setDescription(e.target.value)}
+          rows={2}
+        />
+        <p className="mt-1 text-xs text-text-muted">
+          Optional notes about what this endpoint captures.
+        </p>
+      </div>
 
       <div className="space-y-1.5">
         <div className="flex items-center gap-2">
@@ -158,33 +168,48 @@ export function EndpointForm({ mode, endpoint, isPro = false }: EndpointFormProp
           : 'Upgrade to Pro for custom slugs. A random slug will be generated.'}
       </p>
 
-      <Input
-        label="Response Code"
-        type="number"
-        min={100}
-        max={599}
-        value={responseCode}
-        onChange={(e) => setResponseCode(e.target.value)}
-        error={errors.response_code}
-      />
+      <div>
+        <Input
+          label="Response Code"
+          type="number"
+          min={100}
+          max={599}
+          value={responseCode}
+          onChange={(e) => setResponseCode(e.target.value)}
+          error={errors.response_code}
+        />
+        <p className="mt-1 text-xs text-text-muted">
+          HTTP status code returned to the webhook sender (e.g., 200 for OK).
+        </p>
+      </div>
 
-      <Textarea
-        label="Response Body"
-        value={responseBody}
-        onChange={(e) => setResponseBody(e.target.value)}
-        error={errors.response_body}
-        rows={3}
-        className="font-mono text-xs"
-      />
+      <div>
+        <Textarea
+          label="Response Body"
+          value={responseBody}
+          onChange={(e) => setResponseBody(e.target.value)}
+          error={errors.response_body}
+          rows={3}
+          className="font-mono text-xs"
+        />
+        <p className="mt-1 text-xs text-text-muted">
+          The response body sent back to the webhook sender.
+        </p>
+      </div>
 
-      <Textarea
-        label="Response Headers (JSON)"
-        value={responseHeaders}
-        onChange={(e) => setResponseHeaders(e.target.value)}
-        error={errors.response_headers}
-        rows={3}
-        className="font-mono text-xs"
-      />
+      <div>
+        <Textarea
+          label="Response Headers (JSON)"
+          value={responseHeaders}
+          onChange={(e) => setResponseHeaders(e.target.value)}
+          error={errors.response_headers}
+          rows={3}
+          className="font-mono text-xs"
+        />
+        <p className="mt-1 text-xs text-text-muted">
+          Response headers as a JSON object (e.g., {`{"Content-Type": "application/json"}`}).
+        </p>
+      </div>
 
       <div className="flex items-center gap-3 pt-2">
         <Button type="submit" disabled={submitting}>
