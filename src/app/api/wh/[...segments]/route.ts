@@ -1,6 +1,11 @@
 import { createAdminClient } from '@/lib/supabase/admin'
 import { createRequestLogger } from '@/lib/logger'
-import { checkSlugRateLimit, checkIpRateLimit, RateLimitResult } from '@/lib/rate-limit'
+import {
+  checkSlugRateLimit,
+  checkIpRateLimit,
+  checkAccountRateLimit,
+  RateLimitResult,
+} from '@/lib/rate-limit'
 import { getUserPlan, canReceiveRequest } from '@/lib/usage'
 import { NextRequest, NextResponse } from 'next/server'
 
@@ -14,6 +19,22 @@ function getSourceIp(req: NextRequest): string {
     return forwarded.split(',')[0].trim()
   }
   return req.headers.get('x-real-ip') ?? 'unknown'
+}
+
+/**
+ * Selects the most restrictive rate limit result from all active limiters.
+ * "Most restrictive" = lowest `remaining` count. Ties broken by highest
+ * `reset` timestamp (the window that resets furthest in the future).
+ */
+function selectMostRestrictive(results: RateLimitResult[]): RateLimitResult | null {
+  if (results.length === 0) return null
+  return results.reduce((mostRestrictive, current) => {
+    if (current.remaining < mostRestrictive.remaining) return current
+    if (current.remaining === mostRestrictive.remaining && current.reset > mostRestrictive.reset) {
+      return current
+    }
+    return mostRestrictive
+  })
 }
 
 function applyRateLimitHeaders(headers: Headers, rateLimitResult: RateLimitResult | null): void {
@@ -158,6 +179,7 @@ async function handleWebhookCapture(
 
   // 1. Rate limiting checks — BEFORE any database queries
   let primaryResult: RateLimitResult | null = null
+  const allRateLimitResults: RateLimitResult[] = []
 
   try {
     const [slugResult, ipResult] = await Promise.all([
@@ -165,8 +187,9 @@ async function handleWebhookCapture(
       sourceIp !== 'unknown' ? checkIpRateLimit(sourceIp) : Promise.resolve(null),
     ])
 
-    // Prefer slug-based rate limit info (more specific), fall back to IP-based
-    primaryResult = slugResult ?? ipResult
+    if (slugResult) allRateLimitResults.push(slugResult)
+    if (ipResult) allRateLimitResults.push(ipResult)
+    primaryResult = selectMostRestrictive(allRateLimitResults)
 
     // Check slug rate limit
     if (slugResult && !slugResult.success) {
@@ -246,7 +269,48 @@ async function handleWebhookCapture(
     return NextResponse.json({ error: 'Not found' }, { status: 404, headers: notFoundHeaders })
   }
 
-  // 4. Read body with streaming size limit
+  // 4. Check usage limits and per-account rate limit BEFORE reading body
+  //    to avoid consuming up to 1MB of data for requests that will be rejected.
+  const { data: subscription } = await supabase
+    .from('subscriptions')
+    .select('plan, status')
+    .eq('user_id', endpoint.user_id)
+    .single()
+
+  const plan = getUserPlan(subscription)
+
+  // 4b. Per-account rate limit (tier-aware, checked after plan resolution)
+  try {
+    const accountResult = await checkAccountRateLimit(profile.id, plan)
+    if (accountResult) {
+      allRateLimitResults.push(accountResult)
+
+      if (!accountResult.success) {
+        const retryAfterMs = Math.max(0, accountResult.reset - Date.now())
+        const retryAfterSecs = Math.ceil(retryAfterMs / 1000)
+        const rlHeaders = new Headers({
+          'Retry-After': String(retryAfterSecs),
+          'X-RateLimit-Limit': String(accountResult.limit),
+          'X-RateLimit-Remaining': String(accountResult.remaining),
+        })
+        return NextResponse.json(
+          { error: 'Rate limit exceeded' },
+          { status: 429, headers: rlHeaders }
+        )
+      }
+    }
+  } catch (error) {
+    // Fail open: if rate limiting itself throws, allow the request
+    log.error(
+      { err: error, userId: profile.id },
+      'account rate limiting check failed, allowing request'
+    )
+  }
+
+  // Select the most restrictive rate limit result across all active limiters
+  primaryResult = selectMostRestrictive(allRateLimitResults)
+
+  // 5. Read body with streaming size limit
   const readResult = await readBodyWithLimit(req, MAX_BODY_SIZE, log)
 
   if (readResult.status === 'stream_error') {
@@ -268,15 +332,6 @@ async function handleWebhookCapture(
   }
 
   const { body, sizeBytes } = readResult
-
-  // 5. Check usage limits
-  const { data: subscription } = await supabase
-    .from('subscriptions')
-    .select('plan, status')
-    .eq('user_id', endpoint.user_id)
-    .single()
-
-  const plan = getUserPlan(subscription)
 
   const { data: usageData } = await supabase.rpc('get_current_usage', {
     p_user_id: endpoint.user_id,

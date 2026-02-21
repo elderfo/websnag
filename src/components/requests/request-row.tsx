@@ -32,7 +32,7 @@ export function RequestRow({
       } ${isNew ? 'animate-highlight' : ''}`}
     >
       {showCheckbox && (
-        <label className="flex items-center pl-3 cursor-pointer">
+        <label className="flex items-center pl-3 cursor-pointer min-h-[44px] min-w-[44px] justify-center">
           <input
             type="checkbox"
             checked={isChecked}
@@ -45,7 +45,7 @@ export function RequestRow({
       <button
         type="button"
         onClick={() => onSelect(request)}
-        className="flex-1 text-left px-4 py-3"
+        className="flex-1 text-left px-4 py-3 min-h-[44px]"
       >
         <div className="flex items-center gap-3">
           <MethodBadge method={request.method} />

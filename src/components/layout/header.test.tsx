@@ -67,9 +67,10 @@ describe('Header', () => {
     })
   })
 
-  it('renders the mobile logo', () => {
+  it('renders the mobile wordmark', () => {
     render(<Header userEmail="user@example.com" plan="free" />)
-    expect(getFirst('websnag')).toBeInTheDocument()
+    expect(getFirst('web')).toBeInTheDocument()
+    expect(getFirst('snag')).toBeInTheDocument()
   })
 
   it('renders mobile nav slot when provided', () => {

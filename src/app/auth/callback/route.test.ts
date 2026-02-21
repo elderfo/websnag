@@ -1,9 +1,23 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { GET } from './route'
+import { sendWelcomeEmail } from '@/lib/email'
 
 const mockExchangeCodeForSession = vi.fn()
 const mockGetUser = vi.fn()
 const mockMaybeSingle = vi.fn()
+
+vi.mock('@/lib/email', () => ({
+  sendWelcomeEmail: vi.fn(),
+}))
+
+vi.mock('@/lib/logger', () => ({
+  createLogger: () => ({
+    info: vi.fn(),
+    debug: vi.fn(),
+    error: vi.fn(),
+    warn: vi.fn(),
+  }),
+}))
 
 vi.mock('@/lib/supabase/server', () => ({
   createClient: vi.fn().mockResolvedValue({
@@ -17,6 +31,7 @@ vi.mock('@/lib/supabase/server', () => ({
           maybeSingle: (...args: unknown[]) => mockMaybeSingle(...args),
         }),
       }),
+      insert: vi.fn().mockResolvedValue({ error: null }),
     }),
   }),
 }))
@@ -115,5 +130,36 @@ describe('Auth callback route', () => {
 
     expect(response.status).toBe(307)
     expect(response.headers.get('location')).toBe('http://localhost:3000/endpoints/new')
+  })
+
+  it('sends welcome email when profile does not exist (new user)', async () => {
+    mockExchangeCodeForSession.mockResolvedValue({ error: null })
+    mockGetUser.mockResolvedValue({
+      data: { user: { id: 'user-1', email: 'new@example.com' } },
+      error: null,
+    })
+    mockMaybeSingle.mockResolvedValue({ data: null, error: null })
+
+    const request = new Request('http://localhost:3000/auth/callback?code=test-code')
+    await GET(request)
+
+    expect(sendWelcomeEmail).toHaveBeenCalledWith('new@example.com')
+  })
+
+  it('does not send welcome email when profile already exists', async () => {
+    mockExchangeCodeForSession.mockResolvedValue({ error: null })
+    mockGetUser.mockResolvedValue({
+      data: { user: { id: 'user-1', email: 'existing@example.com' } },
+      error: null,
+    })
+    mockMaybeSingle.mockResolvedValue({
+      data: { username: 'existinguser' },
+      error: null,
+    })
+
+    const request = new Request('http://localhost:3000/auth/callback?code=test-code')
+    await GET(request)
+
+    expect(sendWelcomeEmail).not.toHaveBeenCalled()
   })
 })
