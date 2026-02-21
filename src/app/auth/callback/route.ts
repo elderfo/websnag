@@ -26,12 +26,16 @@ export async function GET(request: Request) {
         // New user (no profile row yet) — create profile and send welcome email
         if (!profile) {
           // Create profile row to prevent duplicate welcome emails on re-login
-          await supabase.from('profiles').insert({ id: user.id })
+          const { error: insertError } = await supabase.from('profiles').insert({ id: user.id })
 
-          const email = user.email ?? user.user_metadata?.email
-          if (email) {
-            // Fire-and-forget: don't block the auth redirect
-            void sendWelcomeEmail(email)
+          // Only send welcome email if insert succeeded — a conflict error means
+          // a concurrent login already created the profile (race condition guard)
+          if (!insertError) {
+            const email = user.email ?? user.user_metadata?.email
+            if (email) {
+              // Fire-and-forget: don't block the auth redirect
+              void sendWelcomeEmail(email)
+            }
           }
         }
 
