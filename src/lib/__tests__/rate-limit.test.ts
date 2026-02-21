@@ -102,7 +102,7 @@ describe('checkSlugRateLimit', () => {
     expect(result!.remaining).toBe(0)
   })
 
-  it('returns null (fail open) when Redis env vars are missing', async () => {
+  it('uses in-memory fallback when Redis env vars are missing', async () => {
     process.env = { ...originalEnv }
     delete process.env.UPSTASH_REDIS_REST_URL
     delete process.env.UPSTASH_REDIS_REST_TOKEN
@@ -110,20 +110,22 @@ describe('checkSlugRateLimit', () => {
     const { checkSlugRateLimit } = await importRateLimit()
     const result = await checkSlugRateLimit('my-slug')
 
-    expect(result).toBeNull()
+    expect(result).not.toBeNull()
+    expect(result!.success).toBe(true)
     expect(mockLimit).not.toHaveBeenCalled()
   })
 
-  it('returns null (fail open) when Redis throws an error', async () => {
+  it('uses in-memory fallback when Redis throws an error', async () => {
     mockLimit.mockRejectedValueOnce(new Error('Redis connection failed'))
 
     const { checkSlugRateLimit } = await importRateLimit()
     const result = await checkSlugRateLimit('my-slug')
 
-    expect(result).toBeNull()
+    expect(result).not.toBeNull()
+    expect(result!.success).toBe(true)
   })
 
-  it('returns null (fail open) when Redis.fromEnv() throws', async () => {
+  it('uses in-memory fallback when Redis.fromEnv() throws', async () => {
     mockFromEnv.mockImplementationOnce(() => {
       throw new Error('Redis.fromEnv failed')
     })
@@ -131,7 +133,8 @@ describe('checkSlugRateLimit', () => {
     const { checkSlugRateLimit } = await importRateLimit()
     const result = await checkSlugRateLimit('my-slug')
 
-    expect(result).toBeNull()
+    expect(result).not.toBeNull()
+    expect(result!.success).toBe(true)
     expect(mockLimit).not.toHaveBeenCalled()
   })
 
@@ -215,7 +218,7 @@ describe('checkIpRateLimit', () => {
     expect(result!.remaining).toBe(0)
   })
 
-  it('returns null (fail open) when Redis env vars are missing', async () => {
+  it('uses in-memory fallback when Redis env vars are missing', async () => {
     process.env = { ...originalEnv }
     delete process.env.UPSTASH_REDIS_REST_URL
     delete process.env.UPSTASH_REDIS_REST_TOKEN
@@ -223,20 +226,22 @@ describe('checkIpRateLimit', () => {
     const { checkIpRateLimit } = await importRateLimit()
     const result = await checkIpRateLimit('1.2.3.4')
 
-    expect(result).toBeNull()
+    expect(result).not.toBeNull()
+    expect(result!.success).toBe(true)
     expect(mockLimit).not.toHaveBeenCalled()
   })
 
-  it('returns null (fail open) when Redis throws an error', async () => {
+  it('uses in-memory fallback when Redis throws an error', async () => {
     mockLimit.mockRejectedValueOnce(new Error('Redis connection failed'))
 
     const { checkIpRateLimit } = await importRateLimit()
     const result = await checkIpRateLimit('1.2.3.4')
 
-    expect(result).toBeNull()
+    expect(result).not.toBeNull()
+    expect(result!.success).toBe(true)
   })
 
-  it('returns null (fail open) when Redis.fromEnv() throws', async () => {
+  it('uses in-memory fallback when Redis.fromEnv() throws', async () => {
     mockFromEnv.mockImplementationOnce(() => {
       throw new Error('Redis.fromEnv failed')
     })
@@ -244,7 +249,8 @@ describe('checkIpRateLimit', () => {
     const { checkIpRateLimit } = await importRateLimit()
     const result = await checkIpRateLimit('1.2.3.4')
 
-    expect(result).toBeNull()
+    expect(result).not.toBeNull()
+    expect(result!.success).toBe(true)
     expect(mockLimit).not.toHaveBeenCalled()
   })
 
@@ -260,5 +266,46 @@ describe('checkIpRateLimit', () => {
     await checkIpRateLimit('10.20.30.40')
 
     expect(mockLimit).toHaveBeenCalledWith('10.20.30.40')
+  })
+})
+
+describe('in-memory fallback rate limiting', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    vi.resetModules()
+    // No Redis env vars — force fallback
+    process.env = { ...originalEnv }
+    delete process.env.UPSTASH_REDIS_REST_URL
+    delete process.env.UPSTASH_REDIS_REST_TOKEN
+    mockFromEnv.mockReturnValue(undefined)
+  })
+
+  afterEach(() => {
+    process.env = originalEnv
+    vi.resetModules()
+  })
+
+  it('slug limiter returns non-null result when Redis unavailable', async () => {
+    const { checkSlugRateLimit } = await importRateLimit()
+    const result = await checkSlugRateLimit('my-slug')
+    expect(result).not.toBeNull()
+    expect(result!.success).toBe(true)
+  })
+
+  it('slug fallback rate limits after exceeding limit', async () => {
+    const { checkSlugRateLimit } = await importRateLimit()
+    let lastResult = null
+    for (let i = 0; i < 65; i++) {
+      lastResult = await checkSlugRateLimit('flood-slug')
+    }
+    expect(lastResult).not.toBeNull()
+    expect(lastResult!.success).toBe(false)
+  })
+
+  it('IP limiter returns non-null result when Redis unavailable', async () => {
+    const { checkIpRateLimit } = await importRateLimit()
+    const result = await checkIpRateLimit('1.2.3.4')
+    expect(result).not.toBeNull()
+    expect(result!.success).toBe(true)
   })
 })
