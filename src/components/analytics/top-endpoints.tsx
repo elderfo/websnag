@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import type { TopEndpoint } from '@/app/api/analytics/route'
+import type { TopEndpoint } from '@/types'
 
 interface TopEndpointsProps {
   data: TopEndpoint[]

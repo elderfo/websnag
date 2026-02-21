@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { VolumeChart } from '@/components/analytics/volume-chart'
 import { MethodChart } from '@/components/analytics/method-chart'
 import { TopEndpoints } from '@/components/analytics/top-endpoints'
-import type { AnalyticsResponse } from '@/app/api/analytics/route'
+import type { AnalyticsResponse } from '@/types'
 
 type Range = 7 | 30 | 90
 

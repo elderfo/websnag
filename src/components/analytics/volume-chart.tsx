@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import type { VolumeByDay } from '@/app/api/analytics/route'
+import type { VolumeByDay } from '@/types'
 
 interface VolumeChartProps {
   data: VolumeByDay[]

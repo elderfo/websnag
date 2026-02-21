@@ -2,6 +2,7 @@ import { z } from 'zod'
 import { createClient } from '@/lib/supabase/server'
 import { createRequestLogger } from '@/lib/logger'
 import { NextResponse, type NextRequest } from 'next/server'
+import type { VolumeByDay, MethodBreakdown, TopEndpoint, AnalyticsResponse } from '@/types'
 
 const VALID_RANGES = [7, 30, 90] as const
 
@@ -12,29 +13,6 @@ const AnalyticsQuerySchema = z.object({
       message: 'range must be 7, 30, or 90',
     }),
 })
-
-export interface VolumeByDay {
-  date: string
-  count: number
-}
-
-export interface MethodBreakdown {
-  method: string
-  count: number
-}
-
-export interface TopEndpoint {
-  id: string
-  name: string
-  slug: string
-  count: number
-}
-
-export interface AnalyticsResponse {
-  volumeByDay: VolumeByDay[]
-  methodBreakdown: MethodBreakdown[]
-  topEndpoints: TopEndpoint[]
-}
 
 function fillMissingDays(
   rows: Array<{ day: string; count: number }>,

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import type { AnalyticsResponse } from '../route'
+import type { AnalyticsResponse } from '@/types'
 
 const mockGetUser = vi.fn()
 const mockRpc = vi.fn()

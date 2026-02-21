@@ -96,6 +96,31 @@ export const LIMITS: Record<Plan, TierLimits> = {
   },
 }
 
+// Analytics types
+
+export interface VolumeByDay {
+  date: string
+  count: number
+}
+
+export interface MethodBreakdown {
+  method: string
+  count: number
+}
+
+export interface TopEndpoint {
+  id: string
+  name: string
+  slug: string
+  count: number
+}
+
+export interface AnalyticsResponse {
+  volumeByDay: VolumeByDay[]
+  methodBreakdown: MethodBreakdown[]
+  topEndpoints: TopEndpoint[]
+}
+
 // Request filter and pagination types
 
 export interface RequestFilters {

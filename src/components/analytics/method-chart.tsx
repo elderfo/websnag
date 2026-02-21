@@ -1,6 +1,6 @@
 'use client'
 
-import type { MethodBreakdown } from '@/app/api/analytics/route'
+import type { MethodBreakdown } from '@/types'
 
 interface MethodChartProps {
   data: MethodBreakdown[]
