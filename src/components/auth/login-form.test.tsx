@@ -35,6 +35,7 @@ describe('LoginForm', () => {
 
   it('renders the branding and sign-in heading', () => {
     render(<LoginForm />)
+    expect(screen.getByRole('heading')).toBeInTheDocument()
     expect(screen.getAllByText('web').length).toBeGreaterThan(0)
     expect(screen.getAllByText('snag').length).toBeGreaterThan(0)
     expect(screen.getAllByText('Sign in to your account').length).toBeGreaterThan(0)

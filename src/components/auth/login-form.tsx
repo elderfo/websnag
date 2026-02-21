@@ -62,7 +62,9 @@ export function LoginForm() {
       <div className="rounded-lg border border-[#1f1f23] bg-[#111113] p-8">
         {/* Branding */}
         <div className="mb-6 text-center">
-          <Wordmark size="lg" className="block" />
+          <h1>
+            <Wordmark size="lg" className="block" />
+          </h1>
           <p className="mt-1 text-sm text-gray-400">Sign in to your account</p>
         </div>
 
