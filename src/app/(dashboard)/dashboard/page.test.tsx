@@ -61,7 +61,7 @@ function createMockSupabase() {
       if (table === 'requests') {
         return {
           select: vi.fn((_columns: string, opts?: { count?: string; head?: boolean }) => {
-            if (opts?.count === 'exact') {
+            if (opts?.count) {
               return createRequestsCountResult(supabaseError)
             }
             // Recent requests query
@@ -241,7 +241,7 @@ describe('DashboardPage', () => {
       if (table === 'requests') {
         return {
           select: vi.fn((_columns: string, opts?: { count?: string; head?: boolean }) => {
-            if (opts?.count === 'exact') {
+            if (opts?.count) {
               return createRequestsCountResult(null)
             }
             return {
@@ -303,7 +303,7 @@ describe('DashboardPage', () => {
       if (table === 'requests') {
         return {
           select: vi.fn((_columns: string, opts?: { count?: string }) => {
-            if (opts?.count === 'exact') {
+            if (opts?.count) {
               return {
                 gte: vi.fn().mockReturnValue({ data: null, count: 0, error: null }),
                 not: vi.fn().mockReturnValue({ data: null, count: 0, error: null }),

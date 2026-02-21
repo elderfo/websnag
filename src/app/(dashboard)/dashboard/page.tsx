@@ -48,10 +48,10 @@ export default async function DashboardPage() {
     supabase.from('subscriptions').select('plan, status').maybeSingle(),
     supabase.rpc('get_current_usage', { p_user_id: user.id }),
     supabase.from('profiles').select('username').eq('id', user.id).maybeSingle(),
-    supabase.from('requests').select('*', { count: 'exact', head: true }),
+    supabase.from('requests').select('*', { count: 'planned', head: true }),
     supabase
       .from('requests')
-      .select('*', { count: 'exact', head: true })
+      .select('*', { count: 'planned', head: true })
       .not('ai_analysis', 'is', null),
   ])
 
