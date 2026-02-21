@@ -227,6 +227,7 @@ export function CodeSnippets({ endpointUrl }: CodeSnippetsProps) {
             strokeLinecap="round"
             strokeLinejoin="round"
             className="text-accent"
+            aria-hidden="true"
           >
             <polyline points="16 18 22 12 16 6" />
             <polyline points="8 6 2 12 8 18" />
@@ -244,6 +245,7 @@ export function CodeSnippets({ endpointUrl }: CodeSnippetsProps) {
           strokeLinecap="round"
           strokeLinejoin="round"
           className={`text-text-muted transition-transform ${isExpanded ? 'rotate-180' : ''}`}
+          aria-hidden="true"
         >
           <polyline points="6 9 12 15 18 9" />
         </svg>
