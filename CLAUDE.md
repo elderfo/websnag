@@ -96,6 +96,8 @@ websnag/
 │   │   │   ├── filter-bar.tsx       # Method, date, search filters
 │   │   │   ├── bulk-actions.tsx     # Bulk select, delete, export bar
 │   │   ├── analysis/            # AI analysis display, code snippets
+│   │   ├── onboarding/          # Onboarding experience components
+│   │   │   └── checklist.tsx      # Dismissible onboarding checklist (localStorage-backed)
 │   │   └── billing/             # Upgrade prompts, usage display
 │   ├── lib/
 │   │   ├── supabase/
@@ -105,6 +107,7 @@ websnag/
 │   │   │   └── cron.ts          # Query pg_cron job run history via RPC
 │   │   ├── stripe.ts            # Stripe client and helpers
 │   │   ├── anthropic.ts         # Claude API client and prompts
+│   │   ├── email.ts              # Welcome email utility (Resend API or placeholder logging)
 │   │   ├── logger.ts             # Pino structured logger (createLogger, createRequestLogger)
 │   │   ├── retention-health.ts   # Pure retention job health evaluation logic
 │   │   ├── usage.ts             # Usage tracking and limit checking
