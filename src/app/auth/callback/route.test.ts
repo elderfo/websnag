@@ -162,4 +162,40 @@ describe('Auth callback route', () => {
 
     expect(sendWelcomeEmail).not.toHaveBeenCalled()
   })
+
+  it('ignores protocol-relative next parameter and redirects to default', async () => {
+    mockExchangeCodeForSession.mockResolvedValue({ error: null })
+    const request = new Request(
+      'http://localhost:3000/auth/callback?code=test-code&next=//evil.com/phish'
+    )
+    const response = await GET(request)
+    expect(response.headers.get('location')).toBe('http://localhost:3000/auth/redirect')
+  })
+
+  it('ignores next parameter with backslashes', async () => {
+    mockExchangeCodeForSession.mockResolvedValue({ error: null })
+    const request = new Request(
+      'http://localhost:3000/auth/callback?code=test-code&next=/\\evil.com'
+    )
+    const response = await GET(request)
+    expect(response.headers.get('location')).toBe('http://localhost:3000/auth/redirect')
+  })
+
+  it('ignores next parameter with CRLF injection', async () => {
+    mockExchangeCodeForSession.mockResolvedValue({ error: null })
+    const request = new Request(
+      'http://localhost:3000/auth/callback?code=test-code&next=/dashboard%0d%0aSet-Cookie:%20x=y'
+    )
+    const response = await GET(request)
+    expect(response.headers.get('location')).toBe('http://localhost:3000/auth/redirect')
+  })
+
+  it('ignores absolute URL next parameter', async () => {
+    mockExchangeCodeForSession.mockResolvedValue({ error: null })
+    const request = new Request(
+      'http://localhost:3000/auth/callback?code=test-code&next=https://evil.com'
+    )
+    const response = await GET(request)
+    expect(response.headers.get('location')).toBe('http://localhost:3000/auth/redirect')
+  })
 })
