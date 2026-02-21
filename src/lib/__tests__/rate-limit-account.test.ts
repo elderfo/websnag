@@ -149,7 +149,7 @@ describe('checkAccountRateLimit', () => {
     expect(result!.reset).toBe(resetTime)
   })
 
-  it('fails open when Redis is unavailable (returns null)', async () => {
+  it('uses in-memory fallback when Redis is unavailable', async () => {
     delete process.env.UPSTASH_REDIS_REST_URL
     delete process.env.UPSTASH_REDIS_REST_TOKEN
 
@@ -157,10 +157,11 @@ describe('checkAccountRateLimit', () => {
 
     const result = await checkAccountRateLimit('user-no-redis', 'free')
 
-    expect(result).toBeNull()
+    expect(result).not.toBeNull()
+    expect(result!.success).toBe(true)
   })
 
-  it('fails open when Redis limit() call throws', async () => {
+  it('uses in-memory fallback when Redis limit() call throws', async () => {
     const { checkAccountRateLimit } = await freshImport()
 
     mockHget.mockResolvedValue(null)
@@ -168,7 +169,8 @@ describe('checkAccountRateLimit', () => {
 
     const result = await checkAccountRateLimit('user-redis-error', 'pro')
 
-    expect(result).toBeNull()
+    expect(result).not.toBeNull()
+    expect(result!.success).toBe(true)
   })
 
   it('falls back to tier default when override lookup throws', async () => {

@@ -1,3 +1,4 @@
+import { timingSafeEqual } from 'crypto'
 import { NextResponse } from 'next/server'
 import { createRequestLogger } from '@/lib/logger'
 import { getRetentionJobRuns, CronQueryError } from '@/lib/supabase/cron'
@@ -56,7 +57,20 @@ async function sendAlert(
   return true
 }
 
-export async function GET(): Promise<NextResponse> {
+function secureTokenCompare(a: string, b: string): boolean {
+  if (a.length !== b.length) return false
+  return timingSafeEqual(Buffer.from(a), Buffer.from(b))
+}
+
+export async function GET(req: Request): Promise<NextResponse> {
+  const token = req.headers.get('authorization')?.replace('Bearer ', '')
+  const expectedToken = process.env.HEALTH_CHECK_TOKEN
+  const isAuthenticated = !!(expectedToken && token && secureTokenCompare(token, expectedToken))
+
+  if (!isAuthenticated) {
+    return NextResponse.json({ status: 'ok', timestamp: new Date().toISOString() })
+  }
+
   const log = createRequestLogger('health.retention')
   const timestamp = new Date().toISOString()
 

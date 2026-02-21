@@ -234,4 +234,14 @@ describe('useRealtimeRequests', () => {
     // Should not be added because it doesn't match the method filter
     expect(result.current.requests.find((r) => r.id === 'req-get')).toBeUndefined()
   })
+
+  it('escapes LIKE metacharacters in the search filter', async () => {
+    const { result } = renderHook(() => useRealtimeRequests('ep-1', { search: '100%_match\\test' }))
+
+    await waitFor(() => {
+      expect(result.current.loading).toBe(false)
+    })
+
+    expect(mockIlike).toHaveBeenCalledWith('body', '%100\\%\\_match\\\\test%')
+  })
 })

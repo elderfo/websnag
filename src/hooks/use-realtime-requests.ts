@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
+import { escapeLikePattern } from '@/lib/security'
 import type { WebhookRequest, RequestFilters } from '@/types'
 
 const PAGE_SIZE = 50
@@ -53,7 +54,7 @@ export function useRealtimeRequests(endpointId: string, filters: RequestFilters 
         query = query.lte('received_at', filters.dateTo)
       }
       if (filters.search) {
-        query = query.ilike('body', `%${filters.search}%`)
+        query = query.ilike('body', `%${escapeLikePattern(filters.search)}%`)
       }
       if (cursor) {
         query = query.lt('received_at', cursor)

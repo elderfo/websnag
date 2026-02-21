@@ -1,5 +1,6 @@
 import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
+import { isValidOrigin } from '@/lib/security'
 
 export async function updateSession(request: NextRequest) {
   let supabaseResponse = NextResponse.next({
@@ -39,6 +40,21 @@ export async function updateSession(request: NextRequest) {
     const url = request.nextUrl.clone()
     url.pathname = '/login'
     return NextResponse.redirect(url)
+  }
+
+  // CSRF protection: validate Origin header on state-changing requests
+  // to authenticated API routes (skip webhook capture and Stripe webhook which have their own auth)
+  const isMutatingMethod = ['POST', 'PUT', 'PATCH', 'DELETE'].includes(request.method)
+  const isApiRoute = request.nextUrl.pathname.startsWith('/api/')
+  const isWebhookCapture = request.nextUrl.pathname.startsWith('/api/wh/')
+  const isStripeWebhook = request.nextUrl.pathname.startsWith('/api/stripe/webhook')
+
+  if (isMutatingMethod && isApiRoute && !isWebhookCapture && !isStripeWebhook) {
+    const origin = request.headers.get('origin')
+    const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? ''
+    if (!isValidOrigin(origin, appUrl)) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+    }
   }
 
   return supabaseResponse

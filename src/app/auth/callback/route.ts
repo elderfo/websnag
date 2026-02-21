@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { createLogger } from '@/lib/logger'
 import { sendWelcomeEmail } from '@/lib/email'
+import { isSafeRedirectPath } from '@/lib/security'
 import { NextResponse } from 'next/server'
 
 const log = createLogger('auth-callback')
@@ -8,7 +9,8 @@ const log = createLogger('auth-callback')
 export async function GET(request: Request) {
   const { searchParams, origin } = new URL(request.url)
   const code = searchParams.get('code')
-  const next = searchParams.get('next') ?? '/auth/redirect'
+  const rawNext = searchParams.get('next') ?? '/auth/redirect'
+  const next = isSafeRedirectPath(rawNext) ? rawNext : '/auth/redirect'
 
   if (code) {
     const supabase = await createClient()

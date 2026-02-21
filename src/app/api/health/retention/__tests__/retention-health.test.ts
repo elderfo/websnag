@@ -24,6 +24,7 @@ vi.stubGlobal('fetch', mockFetch)
 import { GET } from '../route'
 
 const NOW = new Date('2026-02-20T04:00:00.000Z')
+const HEALTH_TOKEN = 'test-health-token'
 
 function makeRpcRun(
   hoursAgo: number,
@@ -40,6 +41,22 @@ function makeRpcRun(
   }
 }
 
+function makeAuthenticatedRequest(): Request {
+  return new Request('http://localhost:3000/api/health/retention', {
+    headers: { Authorization: `Bearer ${HEALTH_TOKEN}` },
+  })
+}
+
+function makeUnauthenticatedRequest(): Request {
+  return new Request('http://localhost:3000/api/health/retention')
+}
+
+function makeWrongTokenRequest(): Request {
+  return new Request('http://localhost:3000/api/health/retention', {
+    headers: { Authorization: 'Bearer wrong-token' },
+  })
+}
+
 beforeEach(() => {
   vi.clearAllMocks()
   vi.useFakeTimers()
@@ -47,11 +64,36 @@ beforeEach(() => {
   vi.stubEnv('RESEND_API_KEY', 'test-resend-key')
   vi.stubEnv('ALERT_EMAIL_RECIPIENTS', 'ops@example.com')
   vi.stubEnv('ALERT_EMAIL_FROM', 'alerts@websnag.dev')
+  vi.stubEnv('HEALTH_CHECK_TOKEN', HEALTH_TOKEN)
   mockFetch.mockResolvedValue({ ok: true, text: async () => '{}' })
 })
 
 afterEach(() => {
   vi.useRealTimers()
+})
+
+describe('GET /api/health/retention (unauthenticated)', () => {
+  it('returns minimal response when no auth token is provided', async () => {
+    const res = await GET(makeUnauthenticatedRequest())
+    expect(res.status).toBe(200)
+    const json = await res.json()
+    expect(json.status).toBe('ok')
+    expect(json.timestamp).toBeDefined()
+    expect(json.alertSent).toBeUndefined()
+    expect(json.lastRunAt).toBeUndefined()
+    expect(json.lastSuccessAt).toBeUndefined()
+    expect(mockRpc).not.toHaveBeenCalled()
+  })
+
+  it('returns minimal response when wrong token is provided', async () => {
+    const res = await GET(makeWrongTokenRequest())
+    expect(res.status).toBe(200)
+    const json = await res.json()
+    expect(json.status).toBe('ok')
+    expect(json.timestamp).toBeDefined()
+    expect(json.alertSent).toBeUndefined()
+    expect(mockRpc).not.toHaveBeenCalled()
+  })
 })
 
 describe('GET /api/health/retention', () => {
@@ -61,7 +103,7 @@ describe('GET /api/health/retention', () => {
       error: null,
     })
 
-    const res = await GET()
+    const res = await GET(makeAuthenticatedRequest())
     expect(res.status).toBe(200)
 
     const json = await res.json()
@@ -79,7 +121,7 @@ describe('GET /api/health/retention', () => {
       error: null,
     })
 
-    const res = await GET()
+    const res = await GET(makeAuthenticatedRequest())
     expect(res.status).toBe(503)
 
     const json = await res.json()
@@ -98,7 +140,7 @@ describe('GET /api/health/retention', () => {
       error: null,
     })
 
-    const res = await GET()
+    const res = await GET(makeAuthenticatedRequest())
     expect(res.status).toBe(503)
 
     const json = await res.json()
@@ -113,7 +155,7 @@ describe('GET /api/health/retention', () => {
       error: null,
     })
 
-    const res = await GET()
+    const res = await GET(makeAuthenticatedRequest())
     expect(res.status).toBe(503)
 
     const json = await res.json()
@@ -127,7 +169,7 @@ describe('GET /api/health/retention', () => {
       error: { message: 'function get_retention_job_runs does not exist' },
     })
 
-    const res = await GET()
+    const res = await GET(makeAuthenticatedRequest())
     expect(res.status).toBe(503)
 
     const json = await res.json()
@@ -143,7 +185,7 @@ describe('GET /api/health/retention', () => {
       error: null,
     })
 
-    const res = await GET()
+    const res = await GET(makeAuthenticatedRequest())
     const json = await res.json()
 
     expect(json.status).toBe('overdue')
@@ -158,7 +200,7 @@ describe('GET /api/health/retention', () => {
       error: null,
     })
 
-    const res = await GET()
+    const res = await GET(makeAuthenticatedRequest())
     const json = await res.json()
 
     expect(json.status).toBe('overdue')
@@ -177,7 +219,7 @@ describe('GET /api/health/retention', () => {
       error: null,
     })
 
-    const res = await GET()
+    const res = await GET(makeAuthenticatedRequest())
     const json = await res.json()
 
     expect(json.status).toBe('overdue')
@@ -191,7 +233,7 @@ describe('GET /api/health/retention', () => {
       error: null,
     })
 
-    const res = await GET()
+    const res = await GET(makeAuthenticatedRequest())
     expect(res.status).toBe(503)
 
     const json = await res.json()
@@ -206,7 +248,7 @@ describe('GET /api/health/retention', () => {
       error: null,
     })
 
-    await GET()
+    await GET(makeAuthenticatedRequest())
 
     const fetchBody = JSON.parse(mockFetch.mock.calls[0][1].body)
     expect(fetchBody.to).toEqual(['ops@example.com', 'oncall@example.com'])
@@ -215,7 +257,7 @@ describe('GET /api/health/retention', () => {
   it('passes the RPC limit parameter', async () => {
     mockRpc.mockResolvedValue({ data: [], error: null })
 
-    await GET()
+    await GET(makeAuthenticatedRequest())
 
     expect(mockRpc).toHaveBeenCalledWith('get_retention_job_runs', { p_limit: 5 })
   })
