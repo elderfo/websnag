@@ -23,8 +23,11 @@ export async function GET(request: Request) {
           .eq('id', user.id)
           .maybeSingle()
 
-        // New user (no profile row yet) — send welcome email in the background
+        // New user (no profile row yet) — create profile and send welcome email
         if (!profile) {
+          // Create profile row to prevent duplicate welcome emails on re-login
+          await supabase.from('profiles').insert({ id: user.id })
+
           const email = user.email ?? user.user_metadata?.email
           if (email) {
             // Fire-and-forget: don't block the auth redirect

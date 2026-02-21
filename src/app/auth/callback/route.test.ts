@@ -17,6 +17,7 @@ vi.mock('@/lib/supabase/server', () => ({
           maybeSingle: (...args: unknown[]) => mockMaybeSingle(...args),
         }),
       }),
+      insert: vi.fn().mockResolvedValue({ error: null }),
     }),
   }),
 }))
