@@ -56,7 +56,15 @@ async function sendAlert(
   return true
 }
 
-export async function GET(): Promise<NextResponse> {
+export async function GET(req: Request): Promise<NextResponse> {
+  const token = req.headers.get('authorization')?.replace('Bearer ', '')
+  const expectedToken = process.env.HEALTH_CHECK_TOKEN
+  const isAuthenticated = expectedToken && token === expectedToken
+
+  if (!isAuthenticated) {
+    return NextResponse.json({ status: 'ok', timestamp: new Date().toISOString() })
+  }
+
   const log = createRequestLogger('health.retention')
   const timestamp = new Date().toISOString()
 

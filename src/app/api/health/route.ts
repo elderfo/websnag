@@ -2,7 +2,15 @@ import { createClient } from '@supabase/supabase-js'
 import { createRequestLogger } from '@/lib/logger'
 import { NextResponse } from 'next/server'
 
-export async function GET(): Promise<NextResponse> {
+export async function GET(req: Request): Promise<NextResponse> {
+  const token = req.headers.get('authorization')?.replace('Bearer ', '')
+  const expectedToken = process.env.HEALTH_CHECK_TOKEN
+  const isAuthenticated = expectedToken && token === expectedToken
+
+  if (!isAuthenticated) {
+    return NextResponse.json({ status: 'ok', timestamp: new Date().toISOString() })
+  }
+
   const start = Date.now()
   try {
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
