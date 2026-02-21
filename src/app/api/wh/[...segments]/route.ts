@@ -269,30 +269,8 @@ async function handleWebhookCapture(
     return NextResponse.json({ error: 'Not found' }, { status: 404, headers: notFoundHeaders })
   }
 
-  // 4. Read body with streaming size limit
-  const readResult = await readBodyWithLimit(req, MAX_BODY_SIZE, log)
-
-  if (readResult.status === 'stream_error') {
-    const errorHeaders = new Headers()
-    applyRateLimitHeaders(errorHeaders, primaryResult)
-    return NextResponse.json(
-      { error: 'Failed to read request body' },
-      { status: 500, headers: errorHeaders }
-    )
-  }
-
-  if (readResult.status === 'too_large') {
-    const tooLargeHeaders = new Headers()
-    applyRateLimitHeaders(tooLargeHeaders, primaryResult)
-    return NextResponse.json(
-      { error: 'Payload too large' },
-      { status: 413, headers: tooLargeHeaders }
-    )
-  }
-
-  const { body, sizeBytes } = readResult
-
-  // 5. Check usage limits
+  // 4. Check usage limits and per-account rate limit BEFORE reading body
+  //    to avoid consuming up to 1MB of data for requests that will be rejected.
   const { data: subscription } = await supabase
     .from('subscriptions')
     .select('plan, status')
@@ -301,7 +279,7 @@ async function handleWebhookCapture(
 
   const plan = getUserPlan(subscription)
 
-  // 5b. Per-account rate limit (tier-aware, checked after plan resolution)
+  // 4b. Per-account rate limit (tier-aware, checked after plan resolution)
   try {
     const accountResult = await checkAccountRateLimit(profile.id, plan)
     if (accountResult) {
@@ -331,6 +309,29 @@ async function handleWebhookCapture(
 
   // Select the most restrictive rate limit result across all active limiters
   primaryResult = selectMostRestrictive(allRateLimitResults)
+
+  // 5. Read body with streaming size limit
+  const readResult = await readBodyWithLimit(req, MAX_BODY_SIZE, log)
+
+  if (readResult.status === 'stream_error') {
+    const errorHeaders = new Headers()
+    applyRateLimitHeaders(errorHeaders, primaryResult)
+    return NextResponse.json(
+      { error: 'Failed to read request body' },
+      { status: 500, headers: errorHeaders }
+    )
+  }
+
+  if (readResult.status === 'too_large') {
+    const tooLargeHeaders = new Headers()
+    applyRateLimitHeaders(tooLargeHeaders, primaryResult)
+    return NextResponse.json(
+      { error: 'Payload too large' },
+      { status: 413, headers: tooLargeHeaders }
+    )
+  }
+
+  const { body, sizeBytes } = readResult
 
   const { data: usageData } = await supabase.rpc('get_current_usage', {
     p_user_id: endpoint.user_id,
