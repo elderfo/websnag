@@ -4,6 +4,15 @@ const log = createLogger('email')
 
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? 'https://websnag.dev'
 
+function escapeHtml(unsafe: string): string {
+  return unsafe
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;')
+}
+
 function buildWelcomeEmailText(username?: string): string {
   const greeting = username ? `Hey ${username}` : 'Hey there'
 
@@ -38,7 +47,7 @@ function buildWelcomeEmailText(username?: string): string {
 }
 
 function buildWelcomeEmailHtml(username?: string): string {
-  const greeting = username ? `Hey ${username}` : 'Hey there'
+  const greeting = username ? `Hey ${escapeHtml(username)}` : 'Hey there'
 
   return `
 <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 560px; margin: 0 auto; color: #e0e0e0; background-color: #0a0a0b; padding: 32px;">
