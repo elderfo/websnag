@@ -357,10 +357,23 @@ async function handleWebhookCapture(
 
   // 5b. Atomic usage check + increment (fixes race condition #73)
   const requestLimit = plan === 'pro' ? 0 : LIMITS.free.maxRequestsPerMonth
-  const { data: withinLimit } = await supabase.rpc('try_increment_request_count', {
-    p_user_id: endpoint.user_id,
-    p_limit: requestLimit,
-  })
+  const { data: withinLimit, error: usageError } = await supabase.rpc(
+    'try_increment_request_count',
+    {
+      p_user_id: endpoint.user_id,
+      p_limit: requestLimit,
+    }
+  )
+
+  if (usageError) {
+    log.error({ err: usageError, userId: endpoint.user_id }, 'usage increment RPC failed')
+    // Fail closed for free tier (prevent unlimited usage), fail open for pro
+    if (plan !== 'pro') {
+      const limitHeaders = new Headers()
+      applyRateLimitHeaders(limitHeaders, primaryResult)
+      return NextResponse.json({ error: 'Not found' }, { status: 404, headers: limitHeaders })
+    }
+  }
 
   if (withinLimit === false) {
     const limitHeaders = new Headers()
@@ -405,9 +418,9 @@ async function handleWebhookCapture(
   // Attach rate limit headers to the success response when available
   applyRateLimitHeaders(responseHeaders, primaryResult)
 
-  // Runtime guard: override 3xx status codes to prevent redirect abuse (#75)
-  const responseCode =
-    endpoint.response_code >= 300 && endpoint.response_code < 400 ? 200 : endpoint.response_code
+  // Runtime guard: default null response_code to 200, override 3xx to prevent redirect abuse (#75)
+  const baseCode = endpoint.response_code ?? 200
+  const responseCode = baseCode >= 300 && baseCode < 400 ? 200 : baseCode
 
   return new NextResponse(endpoint.response_body, {
     status: responseCode,

@@ -542,10 +542,9 @@ describe('handleWebhook (namespaced route /wh/[username]/[slug])', () => {
     expect(insertWithError.insert).toHaveBeenCalled()
   })
 
-  it('still captures request when try_increment_request_count returns null (RPC error)', async () => {
+  it('returns 404 when try_increment_request_count RPC fails for free tier (fail closed)', async () => {
     mockRpc.mockImplementation((fn: string) => {
       if (fn === 'try_increment_request_count') {
-        // data is null when RPC errors — withinLimit !== false, so request goes through
         return Promise.resolve({ data: null, error: { message: 'RPC error' } })
       }
       return Promise.resolve({ data: null, error: null })
@@ -554,7 +553,31 @@ describe('handleWebhook (namespaced route /wh/[username]/[slug])', () => {
     const req = createRequest('POST', { body: '{}' })
     const res = await handleWebhook(req, { params })
 
-    // Should still return the configured response (fail open)
+    // Free tier fails closed to prevent unlimited usage on RPC error
+    expect(res.status).toBe(404)
+  })
+
+  it('still captures request when try_increment_request_count RPC fails for pro tier (fail open)', async () => {
+    subscriptionChain = setupSubscriptionQuery({ plan: 'pro', status: 'active' })
+    mockFrom.mockImplementation((table: string) => {
+      if (table === 'profiles') return profileChain
+      if (table === 'endpoints') return endpointChain
+      if (table === 'subscriptions') return subscriptionChain
+      if (table === 'requests') return insertChain
+      return {}
+    })
+
+    mockRpc.mockImplementation((fn: string) => {
+      if (fn === 'try_increment_request_count') {
+        return Promise.resolve({ data: null, error: { message: 'RPC error' } })
+      }
+      return Promise.resolve({ data: null, error: null })
+    })
+
+    const req = createRequest('POST', { body: '{}' })
+    const res = await handleWebhook(req, { params })
+
+    // Pro tier fails open — don't block paying customers
     expect(res.status).toBe(200)
   })
 
