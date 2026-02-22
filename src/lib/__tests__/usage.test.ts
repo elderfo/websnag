@@ -83,7 +83,7 @@ describe('getUserPlan', () => {
     expect(getUserPlan({ plan: 'free', status: 'active' })).toBe('free')
   })
 
-  it('returns free for trialing pro subscription', () => {
-    expect(getUserPlan({ plan: 'pro', status: 'trialing' })).toBe('free')
+  it('returns pro for trialing pro subscription', () => {
+    expect(getUserPlan({ plan: 'pro', status: 'trialing' })).toBe('pro')
   })
 })

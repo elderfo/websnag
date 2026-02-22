@@ -7,7 +7,11 @@ describe('Dashboard Error Boundary', () => {
     const error = new Error('Dashboard error')
     render(<DashboardError error={error} reset={vi.fn()} />)
     expect(screen.getByText('Something went wrong')).toBeInTheDocument()
-    expect(screen.getByText('Dashboard error')).toBeInTheDocument()
+    expect(
+      screen.getByText(
+        'An unexpected error occurred. Please try again or contact support if the problem persists.'
+      )
+    ).toBeInTheDocument()
   })
 
   it('calls reset when Try again is clicked', () => {

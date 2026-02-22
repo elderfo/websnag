@@ -11,7 +11,11 @@ describe('Root Error Boundary', () => {
     const error = makeError('Test error message')
     render(<ErrorPage error={error} reset={vi.fn()} />)
     expect(screen.getByText('Something went wrong')).toBeInTheDocument()
-    expect(screen.getByText('Test error message')).toBeInTheDocument()
+    expect(
+      screen.getByText(
+        'An unexpected error occurred. Please try again or contact support if the problem persists.'
+      )
+    ).toBeInTheDocument()
   })
 
   it('calls reset when Try again is clicked', () => {

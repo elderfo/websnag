@@ -19,6 +19,13 @@ async function resolveUserId(
 
 export async function POST(req: Request) {
   const log = createRequestLogger('stripe-webhook')
+
+  const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET
+  if (!webhookSecret) {
+    log.error('STRIPE_WEBHOOK_SECRET is not configured')
+    return NextResponse.json({ error: 'Webhook handler misconfigured' }, { status: 500 })
+  }
+
   const body = await req.text()
   const signature = req.headers.get('stripe-signature')
 
@@ -28,7 +35,7 @@ export async function POST(req: Request) {
 
   let event: Stripe.Event
   try {
-    event = stripe.webhooks.constructEvent(body, signature, process.env.STRIPE_WEBHOOK_SECRET!)
+    event = stripe.webhooks.constructEvent(body, signature, webhookSecret)
   } catch (error) {
     log.warn({ err: error }, 'Stripe webhook signature verification failed')
     return NextResponse.json({ error: 'Invalid signature' }, { status: 400 })
