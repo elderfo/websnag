@@ -86,25 +86,20 @@ export function RequestFeed({ endpointId, endpointUrl }: RequestFeedProps) {
     }
   }
 
-  // Bulk delete
+  // Bulk delete — throws on failure so BulkActions keeps selection and shows its own error
   async function handleBulkDelete() {
+    setDeleteError(null)
     const ids = Array.from(checkedIds)
-    try {
-      const res = await fetch('/api/requests/bulk-delete', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ requestIds: ids }),
-      })
-      if (res.ok) {
-        removeRequests(ids)
-        setCheckedIds(new Set())
-        if (selectedId && ids.includes(selectedId)) setSelectedId(null)
-      } else {
-        setDeleteError('Failed to delete selected requests. Please try again.')
-      }
-    } catch {
-      setDeleteError('Failed to delete selected requests. Please try again.')
+    const res = await fetch('/api/requests/bulk-delete', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ requestIds: ids }),
+    })
+    if (!res.ok) {
+      throw new Error('Failed to delete selected requests')
     }
+    removeRequests(ids)
+    if (selectedId && ids.includes(selectedId)) setSelectedId(null)
   }
 
   // Export helpers
