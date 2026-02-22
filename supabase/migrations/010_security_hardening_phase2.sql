@@ -34,3 +34,8 @@ BEGIN
   RETURN current <= p_limit;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
+
+-- Restrict execute to service_role only (called from admin client in webhook handler)
+REVOKE EXECUTE ON FUNCTION try_increment_request_count(UUID, INT) FROM public;
+REVOKE EXECUTE ON FUNCTION try_increment_request_count(UUID, INT) FROM anon;
+REVOKE EXECUTE ON FUNCTION try_increment_request_count(UUID, INT) FROM authenticated;
