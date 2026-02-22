@@ -7,19 +7,40 @@ import {
   RateLimitResult,
 } from '@/lib/rate-limit'
 import { isAllowedResponseHeader } from '@/lib/security'
-import { getUserPlan, canReceiveRequest } from '@/lib/usage'
+import { getUserPlan } from '@/lib/usage'
+import { LIMITS } from '@/types'
 import { NextRequest, NextResponse } from 'next/server'
 
 const MAX_BODY_SIZE = 1_048_576 // 1MB
 
 type RouteContext = { params: Promise<{ segments: string[] }> }
 
+function anonymizeIp(ip: string): string {
+  // IPv6
+  if (ip.includes(':')) {
+    const parts = ip.split(':')
+    return parts.slice(0, 3).join(':') + ':0:0:0:0:0'
+  }
+  // IPv4
+  const parts = ip.split('.')
+  if (parts.length === 4) {
+    parts[3] = '0'
+    return parts.join('.')
+  }
+  return ip
+}
+
 function getSourceIp(req: NextRequest): string {
   const forwarded = req.headers.get('x-forwarded-for')
   if (forwarded) {
-    return forwarded.split(',')[0].trim()
+    const raw = forwarded.split(',')[0].trim()
+    return anonymizeIp(raw)
   }
-  return req.headers.get('x-real-ip') ?? 'unknown'
+  const realIp = req.headers.get('x-real-ip')
+  if (realIp) {
+    return anonymizeIp(realIp)
+  }
+  return 'unknown'
 }
 
 /**
@@ -334,13 +355,14 @@ async function handleWebhookCapture(
 
   const { body, sizeBytes } = readResult
 
-  const { data: usageData } = await supabase.rpc('get_current_usage', {
+  // 5b. Atomic usage check + increment (fixes race condition #73)
+  const requestLimit = plan === 'pro' ? 0 : LIMITS.free.maxRequestsPerMonth
+  const { data: withinLimit } = await supabase.rpc('try_increment_request_count', {
     p_user_id: endpoint.user_id,
+    p_limit: requestLimit,
   })
 
-  const currentRequests = usageData?.[0]?.request_count ?? 0
-
-  if (!canReceiveRequest(currentRequests, plan)) {
+  if (withinLimit === false) {
     const limitHeaders = new Headers()
     applyRateLimitHeaders(limitHeaders, primaryResult)
     return NextResponse.json({ error: 'Not found' }, { status: 404, headers: limitHeaders })
@@ -368,16 +390,7 @@ async function handleWebhookCapture(
 
   log.info({ endpointId: endpoint.id, method: req.method, sizeBytes }, 'webhook captured')
 
-  // 7. Increment usage counter
-  const { error: rpcError } = await supabase.rpc('increment_request_count', {
-    p_user_id: endpoint.user_id,
-  })
-
-  if (rpcError) {
-    log.error({ err: rpcError, userId: endpoint.user_id }, 'increment_request_count failed')
-  }
-
-  // 8. Return configured response
+  // 7. Return configured response
   const responseHeaders = new Headers()
   if (endpoint.response_headers) {
     for (const [key, value] of Object.entries(
@@ -392,8 +405,12 @@ async function handleWebhookCapture(
   // Attach rate limit headers to the success response when available
   applyRateLimitHeaders(responseHeaders, primaryResult)
 
+  // Runtime guard: override 3xx status codes to prevent redirect abuse (#75)
+  const responseCode =
+    endpoint.response_code >= 300 && endpoint.response_code < 400 ? 200 : endpoint.response_code
+
   return new NextResponse(endpoint.response_body, {
-    status: endpoint.response_code,
+    status: responseCode,
     headers: responseHeaders,
   })
 }
