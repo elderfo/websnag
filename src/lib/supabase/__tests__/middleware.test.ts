@@ -58,6 +58,7 @@ describe('middleware CORS headers', () => {
       'GET, POST, PUT, PATCH, DELETE'
     )
     expect(response.headers.get('Access-Control-Allow-Headers')).toBe('Content-Type, Authorization')
+    expect(response.headers.get('Vary')).toContain('Origin')
   })
 
   it('does not set CORS headers when origin does not match', async () => {
@@ -68,6 +69,8 @@ describe('middleware CORS headers', () => {
     const response = await updateSession(request)
 
     expect(response.headers.get('Access-Control-Allow-Origin')).toBeNull()
+    // Vary: Origin is always set for API routes regardless of origin match
+    expect(response.headers.get('Vary')).toContain('Origin')
   })
 
   it('does not set CORS headers when no origin is provided', async () => {

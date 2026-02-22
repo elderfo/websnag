@@ -63,6 +63,9 @@ export async function updateSession(request: NextRequest) {
     const origin = request.headers.get('origin')
     const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? ''
 
+    // Vary: Origin tells caches the response depends on the request Origin header
+    supabaseResponse.headers.append('Vary', 'Origin')
+
     if (origin && isValidOrigin(origin, appUrl)) {
       supabaseResponse.headers.set('Access-Control-Allow-Origin', origin)
       supabaseResponse.headers.set('Access-Control-Allow-Credentials', 'true')
