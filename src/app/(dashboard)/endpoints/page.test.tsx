@@ -5,23 +5,46 @@ const mockSelect = vi.fn()
 const mockOrder = vi.fn()
 const mockFrom = vi.fn()
 
-vi.mock('@/lib/supabase/server', () => ({
-  createClient: vi.fn().mockResolvedValue({
+function createMockSupabase(endpointsData: unknown[] | null = [], endpointsError: unknown = null) {
+  return {
     from: (...args: unknown[]) => {
       mockFrom(...args)
+      const table = args[0] as string
+
+      if (table === 'profiles') {
+        return {
+          select: (...selectArgs: unknown[]) => {
+            mockSelect(...selectArgs)
+            return {
+              eq: () => ({
+                single: () => ({ data: { username: 'testuser' }, error: null }),
+              }),
+            }
+          },
+        }
+      }
+
+      // Default: endpoints
       return {
         select: (...selectArgs: unknown[]) => {
           mockSelect(...selectArgs)
           return {
             order: (...orderArgs: unknown[]) => {
               mockOrder(...orderArgs)
-              return { data: [], error: null }
+              return { data: endpointsData, error: endpointsError }
             },
           }
         },
       }
     },
-  }),
+    auth: {
+      getUser: () => ({ data: { user: { id: 'user-1' } }, error: null }),
+    },
+  }
+}
+
+vi.mock('@/lib/supabase/server', () => ({
+  createClient: vi.fn().mockResolvedValue(createMockSupabase()),
 }))
 
 vi.mock('next/link', () => ({
@@ -33,8 +56,16 @@ vi.mock('next/link', () => ({
 }))
 
 vi.mock('@/components/endpoints/endpoint-card', () => ({
-  EndpointCard: ({ endpoint }: { endpoint: { id: string; name: string } }) => (
-    <div data-testid={`endpoint-card-${endpoint.id}`}>{endpoint.name}</div>
+  EndpointCard: ({
+    endpoint,
+    username,
+  }: {
+    endpoint: { id: string; name: string }
+    username: string | null
+  }) => (
+    <div data-testid={`endpoint-card-${endpoint.id}`} data-username={username}>
+      {endpoint.name}
+    </div>
   ),
 }))
 
@@ -72,37 +103,28 @@ describe('EndpointsPage', () => {
     expect(screen.getByText('Create your first endpoint')).toBeInTheDocument()
   })
 
-  it('renders endpoint cards when endpoints exist', async () => {
+  it('renders endpoint cards with username when endpoints exist', async () => {
     const mockEndpoints = [
       { id: '1', name: 'Stripe Webhook', slug: 'abc', created_at: '2024-01-01' },
       { id: '2', name: 'GitHub Webhook', slug: 'def', created_at: '2024-01-02' },
     ]
 
     const { createClient } = await import('@/lib/supabase/server')
-    vi.mocked(createClient).mockResolvedValueOnce({
-      from: () => ({
-        select: () => ({
-          order: () => ({ data: mockEndpoints, error: null }),
-        }),
-      }),
-    } as never)
+    vi.mocked(createClient).mockResolvedValueOnce(createMockSupabase(mockEndpoints) as never)
 
     const Page = await EndpointsPage()
     render(Page)
     expect(screen.getByTestId('endpoint-card-1')).toHaveTextContent('Stripe Webhook')
     expect(screen.getByTestId('endpoint-card-2')).toHaveTextContent('GitHub Webhook')
+    expect(screen.getByTestId('endpoint-card-1')).toHaveAttribute('data-username', 'testuser')
     expect(screen.queryByText('No endpoints yet')).not.toBeInTheDocument()
   })
 
   it('throws when the Supabase query fails', async () => {
     const { createClient } = await import('@/lib/supabase/server')
-    vi.mocked(createClient).mockResolvedValueOnce({
-      from: () => ({
-        select: () => ({
-          order: () => ({ data: null, error: { message: 'connection failed' } }),
-        }),
-      }),
-    } as never)
+    vi.mocked(createClient).mockResolvedValueOnce(
+      createMockSupabase(null, { message: 'connection failed' }) as never
+    )
 
     await expect(EndpointsPage()).rejects.toEqual({ message: 'connection failed' })
   })

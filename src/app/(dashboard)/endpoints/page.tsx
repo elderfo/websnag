@@ -6,16 +6,22 @@ import type { Endpoint } from '@/types'
 export default async function EndpointsPage() {
   const supabase = await createClient()
 
-  const { data: endpoints, error } = await supabase
-    .from('endpoints')
-    .select('*')
-    .order('created_at', { ascending: false })
+  const [endpointsResult, userResult] = await Promise.all([
+    supabase.from('endpoints').select('*').order('created_at', { ascending: false }),
+    supabase.auth.getUser(),
+  ])
 
-  if (error) {
-    throw error
+  if (endpointsResult.error) {
+    throw endpointsResult.error
   }
 
-  const endpointList = (endpoints ?? []) as Endpoint[]
+  const endpointList = (endpointsResult.data ?? []) as Endpoint[]
+
+  const user = userResult.data.user
+  const profileResult = user
+    ? await supabase.from('profiles').select('username').eq('id', user.id).single()
+    : null
+  const username = profileResult?.data?.username ?? null
 
   return (
     <div>
@@ -48,7 +54,7 @@ export default async function EndpointsPage() {
       ) : (
         <div className="mt-6 grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
           {endpointList.map((endpoint) => (
-            <EndpointCard key={endpoint.id} endpoint={endpoint} />
+            <EndpointCard key={endpoint.id} endpoint={endpoint} username={username} />
           ))}
         </div>
       )}
