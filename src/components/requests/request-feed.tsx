@@ -99,9 +99,11 @@ export function RequestFeed({ endpointId, endpointUrl }: RequestFeedProps) {
         removeRequests(ids)
         setCheckedIds(new Set())
         if (selectedId && ids.includes(selectedId)) setSelectedId(null)
+      } else {
+        setDeleteError('Failed to delete selected requests. Please try again.')
       }
     } catch {
-      // Error handling is a no-op; UI state remains unchanged
+      setDeleteError('Failed to delete selected requests. Please try again.')
     }
   }
 
