@@ -74,6 +74,28 @@ describe('createEndpointSchema', () => {
     expect(result.success).toBe(false)
   })
 
+  it.each([300, 301, 302, 303, 307, 308, 399])('rejects redirect status code %d', (code) => {
+    const result = createEndpointSchema.safeParse({
+      name: 'Test',
+      response_code: code,
+    })
+    expect(result.success).toBe(false)
+    if (!result.success) {
+      const messages = result.error.issues.map((i) => i.message)
+      expect(messages).toContain('Redirect status codes (300-399) are not allowed')
+    }
+  })
+
+  it('accepts non-redirect status codes around the boundary', () => {
+    // 299 should be allowed
+    const result299 = createEndpointSchema.safeParse({ name: 'Test', response_code: 299 })
+    expect(result299.success).toBe(true)
+
+    // 400 should be allowed
+    const result400 = createEndpointSchema.safeParse({ name: 'Test', response_code: 400 })
+    expect(result400.success).toBe(true)
+  })
+
   it('rejects response_body that is too long', () => {
     const result = createEndpointSchema.safeParse({
       name: 'Test',

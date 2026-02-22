@@ -67,7 +67,7 @@ describe('GET /api/requests/export', () => {
     expect(res.status).toBe(401)
   })
 
-  it('returns 400 when endpointId is missing', async () => {
+  it('returns 400 when endpointId is missing without leaking validation details', async () => {
     mockGetUser.mockResolvedValue({ data: { user: { id: 'user-1' } } })
 
     const res = await GET(makeRequest())
@@ -75,6 +75,7 @@ describe('GET /api/requests/export', () => {
 
     const data = await res.json()
     expect(data.error).toBe('Invalid request')
+    expect(data).not.toHaveProperty('details')
   })
 
   it('returns 400 for an invalid method filter', async () => {

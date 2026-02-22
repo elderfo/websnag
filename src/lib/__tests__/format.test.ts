@@ -129,6 +129,85 @@ describe('generateCurlCommand', () => {
     )
     expect(result).toContain("it'\\''s a test")
   })
+
+  it('escapes double quotes in header values', () => {
+    const result = generateCurlCommand(
+      {
+        method: 'POST',
+        headers: { 'X-Custom': 'value with "quotes"' },
+        body: null,
+        query_params: {},
+      },
+      'https://example.com/wh/test'
+    )
+    expect(result).toContain('X-Custom: value with \\"quotes\\"')
+    expect(result).not.toContain('value with "quotes"')
+  })
+
+  it('escapes dollar signs in header values', () => {
+    const result = generateCurlCommand(
+      {
+        method: 'POST',
+        headers: { 'X-Custom': 'price is $100' },
+        body: null,
+        query_params: {},
+      },
+      'https://example.com/wh/test'
+    )
+    expect(result).toContain('X-Custom: price is \\$100')
+  })
+
+  it('escapes backticks in header values', () => {
+    const result = generateCurlCommand(
+      {
+        method: 'POST',
+        headers: { 'X-Custom': 'run `cmd`' },
+        body: null,
+        query_params: {},
+      },
+      'https://example.com/wh/test'
+    )
+    expect(result).toContain('X-Custom: run \\`cmd\\`')
+  })
+
+  it('escapes backslashes in header values', () => {
+    const result = generateCurlCommand(
+      {
+        method: 'POST',
+        headers: { 'X-Custom': 'path\\to\\file' },
+        body: null,
+        query_params: {},
+      },
+      'https://example.com/wh/test'
+    )
+    expect(result).toContain('X-Custom: path\\\\to\\\\file')
+  })
+
+  it('escapes shell metacharacters in header keys', () => {
+    const result = generateCurlCommand(
+      {
+        method: 'POST',
+        headers: { 'X-$pecial': 'safe' },
+        body: null,
+        query_params: {},
+      },
+      'https://example.com/wh/test'
+    )
+    expect(result).toContain('X-\\$pecial: safe')
+  })
+
+  it('escapes exclamation marks in header values', () => {
+    const result = generateCurlCommand(
+      {
+        method: 'POST',
+        headers: { 'X-Custom': 'alert! danger!' },
+        body: null,
+        query_params: {},
+      },
+      'https://example.com/wh/test'
+    )
+    expect(result).toContain('X-Custom: alert\\! danger\\!')
+  })
 })
 
 describe('isJsonString', () => {

@@ -34,6 +34,8 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'Invalid signature' }, { status: 400 })
   }
 
+  log.info({ eventId: event.id, eventType: event.type }, 'processing stripe event')
+
   const supabase = createAdminClient()
 
   switch (event.type) {

@@ -1,6 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
-import { createRequestLogger } from '@/lib/logger'
+import { createLogger, createRequestLogger } from '@/lib/logger'
 import { NextResponse } from 'next/server'
 
 interface RetentionResult {
@@ -8,12 +8,19 @@ interface RetentionResult {
   pro_deleted: number
 }
 
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
 function isAdmin(userId: string): boolean {
   const adminIds = process.env.ADMIN_USER_IDS
-  if (!adminIds) return false
+  if (!adminIds) {
+    const log = createLogger('admin')
+    log.warn('ADMIN_USER_IDS environment variable is not configured')
+    return false
+  }
   return adminIds
     .split(',')
     .map((id) => id.trim())
+    .filter((id) => UUID_REGEX.test(id))
     .includes(userId)
 }
 

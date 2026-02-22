@@ -24,7 +24,7 @@ export async function POST(req: Request) {
   const parsed = BulkDeleteSchema.safeParse(body)
 
   if (!parsed.success) {
-    return NextResponse.json({ error: 'Invalid request', details: parsed.error.issues }, { status: 400 })
+    return NextResponse.json({ error: 'Invalid request' }, { status: 400 })
   }
 
   const { requestIds } = parsed.data

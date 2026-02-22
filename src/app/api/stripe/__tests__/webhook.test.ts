@@ -23,6 +23,9 @@ vi.mock('@/lib/stripe', () => ({
   },
 }))
 
+const mockLogInfo = vi.fn()
+const mockLogWarn = vi.fn()
+
 vi.mock('@/lib/logger', () => ({
   createLogger: () => ({
     info: vi.fn(),
@@ -31,9 +34,9 @@ vi.mock('@/lib/logger', () => ({
     debug: vi.fn(),
   }),
   createRequestLogger: () => ({
-    info: vi.fn(),
+    info: (...args: unknown[]) => mockLogInfo(...args),
     error: vi.fn(),
-    warn: vi.fn(),
+    warn: (...args: unknown[]) => mockLogWarn(...args),
     debug: vi.fn(),
     requestId: 'test-request-id',
   }),
@@ -265,5 +268,31 @@ describe('POST /api/stripe/webhook', () => {
 
     const data = await res.json()
     expect(data.received).toBe(true)
+  })
+
+  it('logs event ID and type for processed events', async () => {
+    mockUpdateChain()
+
+    mockConstructEvent.mockReturnValue({
+      id: 'evt_123abc',
+      type: 'checkout.session.completed',
+      data: {
+        object: {
+          customer: 'cus_123',
+          subscription: 'sub_456',
+        },
+      },
+    })
+
+    mockSubscriptionsRetrieve.mockResolvedValue({
+      items: { data: [{ current_period_end: 1700000000 }] },
+    })
+
+    await POST(makeRequest('{}'))
+
+    expect(mockLogInfo).toHaveBeenCalledWith(
+      { eventId: 'evt_123abc', eventType: 'checkout.session.completed' },
+      'processing stripe event'
+    )
   })
 })

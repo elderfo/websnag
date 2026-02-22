@@ -4,7 +4,15 @@ export const createEndpointSchema = z.object({
   name: z.string().min(1).max(100),
   slug: z.string().optional(),
   description: z.string().max(500).optional(),
-  response_code: z.number().int().min(100).max(599).optional(),
+  response_code: z
+    .number()
+    .int()
+    .min(100)
+    .max(599)
+    .refine((code) => code < 300 || code >= 400, {
+      message: 'Redirect status codes (300-399) are not allowed',
+    })
+    .optional(),
   response_body: z.string().max(10000).optional(),
   response_headers: z.record(z.string(), z.string()).optional(),
 })

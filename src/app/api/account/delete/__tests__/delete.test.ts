@@ -59,16 +59,57 @@ function createChain(result: { data?: unknown; error?: unknown }) {
   return chain
 }
 
+function makeRequest(body?: Record<string, unknown>): Request {
+  const init: RequestInit = {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+  }
+  if (body !== undefined) {
+    init.body = JSON.stringify(body)
+  }
+  return new Request('http://localhost:3000/api/account/delete', init)
+}
+
 describe('POST /api/account/delete', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+  })
+
+  it('returns 400 when confirm is not provided', async () => {
+    const { POST } = await import('../route')
+    const response = await POST(makeRequest({}))
+
+    expect(response.status).toBe(400)
+    const body = await response.json()
+    expect(body.error).toContain('Confirmation required')
+  })
+
+  it('returns 400 when confirm is false', async () => {
+    const { POST } = await import('../route')
+    const response = await POST(makeRequest({ confirm: false }))
+
+    expect(response.status).toBe(400)
+    const body = await response.json()
+    expect(body.error).toContain('Confirmation required')
+  })
+
+  it('returns 400 when no body is sent', async () => {
+    const { POST } = await import('../route')
+    const req = new Request('http://localhost:3000/api/account/delete', {
+      method: 'POST',
+    })
+    const response = await POST(req)
+
+    expect(response.status).toBe(400)
+    const body = await response.json()
+    expect(body.error).toContain('Confirmation required')
   })
 
   it('returns 401 when not authenticated', async () => {
     mockGetUser.mockResolvedValue({ data: { user: null } })
 
     const { POST } = await import('../route')
-    const response = await POST()
+    const response = await POST(makeRequest({ confirm: true }))
 
     expect(response.status).toBe(401)
     const body = await response.json()
@@ -82,7 +123,7 @@ describe('POST /api/account/delete', () => {
     })
 
     const { POST } = await import('../route')
-    const response = await POST()
+    const response = await POST(makeRequest({ confirm: true }))
 
     expect(response.status).toBe(401)
     const body = await response.json()
@@ -91,14 +132,14 @@ describe('POST /api/account/delete', () => {
 
   it('successfully deletes user with no subscription', async () => {
     mockGetUser.mockResolvedValue({
-      data: { user: { id: 'user-1' } },
+      data: { user: { id: 'user-1', email: 'user@example.com' } },
     })
 
     mockAdminFrom.mockReturnValue(createChain({ data: null, error: null }))
     mockDeleteUser.mockResolvedValue({ error: null })
 
     const { POST } = await import('../route')
-    const response = await POST()
+    const response = await POST(makeRequest({ confirm: true }))
 
     expect(response.status).toBe(200)
     const body = await response.json()
@@ -108,9 +149,23 @@ describe('POST /api/account/delete', () => {
     expect(mockDeleteUser).toHaveBeenCalledWith('user-1')
   })
 
+  it('logs account deletion initiation before deleting', async () => {
+    mockGetUser.mockResolvedValue({
+      data: { user: { id: 'user-1', email: 'user@example.com' } },
+    })
+
+    mockAdminFrom.mockReturnValue(createChain({ data: null, error: null }))
+    mockDeleteUser.mockResolvedValue({ error: null })
+
+    const { POST } = await import('../route')
+    await POST(makeRequest({ confirm: true }))
+
+    expect(mockLogInfo).toHaveBeenCalledWith({ userId: 'user-1' }, 'account deletion initiated')
+  })
+
   it('successfully deletes user with active Stripe subscription', async () => {
     mockGetUser.mockResolvedValue({
-      data: { user: { id: 'user-1' } },
+      data: { user: { id: 'user-1', email: 'user@example.com' } },
     })
 
     mockAdminFrom.mockReturnValue(
@@ -126,7 +181,7 @@ describe('POST /api/account/delete', () => {
     mockDeleteUser.mockResolvedValue({ error: null })
 
     const { POST } = await import('../route')
-    const response = await POST()
+    const response = await POST(makeRequest({ confirm: true }))
 
     expect(response.status).toBe(200)
     const body = await response.json()
@@ -138,7 +193,7 @@ describe('POST /api/account/delete', () => {
 
   it('handles Stripe cancellation failure gracefully', async () => {
     mockGetUser.mockResolvedValue({
-      data: { user: { id: 'user-1' } },
+      data: { user: { id: 'user-1', email: 'user@example.com' } },
     })
 
     mockAdminFrom.mockReturnValue(
@@ -154,7 +209,7 @@ describe('POST /api/account/delete', () => {
     mockDeleteUser.mockResolvedValue({ error: null })
 
     const { POST } = await import('../route')
-    const response = await POST()
+    const response = await POST(makeRequest({ confirm: true }))
 
     expect(response.status).toBe(200)
     const body = await response.json()
@@ -169,7 +224,7 @@ describe('POST /api/account/delete', () => {
 
   it('returns 500 when admin deleteUser fails', async () => {
     mockGetUser.mockResolvedValue({
-      data: { user: { id: 'user-1' } },
+      data: { user: { id: 'user-1', email: 'user@example.com' } },
     })
 
     mockAdminFrom.mockReturnValue(createChain({ data: null, error: null }))
@@ -178,7 +233,7 @@ describe('POST /api/account/delete', () => {
     })
 
     const { POST } = await import('../route')
-    const response = await POST()
+    const response = await POST(makeRequest({ confirm: true }))
 
     expect(response.status).toBe(500)
     const body = await response.json()
@@ -189,7 +244,7 @@ describe('POST /api/account/delete', () => {
     mockGetUser.mockRejectedValue(new Error('auth service down'))
 
     const { POST } = await import('../route')
-    const response = await POST()
+    const response = await POST(makeRequest({ confirm: true }))
 
     expect(response.status).toBe(500)
     const body = await response.json()
@@ -198,7 +253,7 @@ describe('POST /api/account/delete', () => {
 
   it('logs subscription lookup errors but proceeds with deletion', async () => {
     mockGetUser.mockResolvedValue({
-      data: { user: { id: 'user-1' } },
+      data: { user: { id: 'user-1', email: 'user@example.com' } },
     })
 
     const subError = { code: 'PGRST500', message: 'connection refused' }
@@ -206,16 +261,13 @@ describe('POST /api/account/delete', () => {
     mockDeleteUser.mockResolvedValue({ error: null })
 
     const { POST } = await import('../route')
-    const response = await POST()
+    const response = await POST(makeRequest({ confirm: true }))
 
     expect(response.status).toBe(200)
     const body = await response.json()
     expect(body.success).toBe(true)
 
-    expect(mockLogError).toHaveBeenCalledWith(
-      { err: subError },
-      'subscription lookup failed'
-    )
+    expect(mockLogError).toHaveBeenCalledWith({ err: subError }, 'subscription lookup failed')
     expect(mockDeleteUser).toHaveBeenCalledWith('user-1')
   })
 })
