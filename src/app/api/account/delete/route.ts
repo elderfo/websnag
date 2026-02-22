@@ -56,7 +56,7 @@ export async function POST(req: Request) {
     }
 
     // Log before deletion so audit trail exists even if delete partially fails
-    log.info({ userId: user.id, email: user.email }, 'account deletion initiated')
+    log.info({ userId: user.id }, 'account deletion initiated')
 
     // Delete the user via Supabase Admin Auth
     // This cascades to: profiles, endpoints, requests, usage, subscriptions

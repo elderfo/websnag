@@ -160,10 +160,7 @@ describe('POST /api/account/delete', () => {
     const { POST } = await import('../route')
     await POST(makeRequest({ confirm: true }))
 
-    expect(mockLogInfo).toHaveBeenCalledWith(
-      { userId: 'user-1', email: 'user@example.com' },
-      'account deletion initiated'
-    )
+    expect(mockLogInfo).toHaveBeenCalledWith({ userId: 'user-1' }, 'account deletion initiated')
   })
 
   it('successfully deletes user with active Stripe subscription', async () => {
