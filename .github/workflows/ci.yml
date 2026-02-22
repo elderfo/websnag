@@ -96,7 +96,6 @@ jobs:
       ANTHROPIC_API_KEY: placeholder_anthropic_key
       STRIPE_SECRET_KEY: placeholder_stripe_secret
       STRIPE_WEBHOOK_SECRET: placeholder_webhook_secret
-      NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY: pk_test_placeholder
       STRIPE_PRO_PRICE_ID: price_placeholder
       NEXT_PUBLIC_APP_URL: http://localhost:3000
       UPSTASH_REDIS_REST_URL: https://placeholder.upstash.io
@@ -142,7 +141,7 @@ jobs:
       - run: pnpm install --frozen-lockfile
 
       - name: Install Vercel CLI
-        run: npm i -g vercel
+        run: pnpm add -g vercel
 
       - name: Pull Vercel environment
         run: vercel pull --yes --environment=production --token=${{ secrets.VERCEL_TOKEN }}
@@ -183,7 +182,7 @@ jobs:
       - run: pnpm install --frozen-lockfile
 
       - name: Install Vercel CLI
-        run: npm i -g vercel
+        run: pnpm add -g vercel
 
       - name: Pull Vercel environment
         run: vercel pull --yes --environment=preview --token=${{ secrets.VERCEL_TOKEN }}

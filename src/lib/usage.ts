@@ -14,7 +14,10 @@ export function canAnalyze(currentMonthCount: number, plan: Plan): boolean {
 }
 
 export function getUserPlan(subscription: { plan: string; status: string } | null): Plan {
-  if (subscription?.plan === 'pro' && subscription?.status === 'active') {
+  if (
+    subscription?.plan === 'pro' &&
+    (subscription?.status === 'active' || subscription?.status === 'trialing')
+  ) {
     return 'pro'
   }
   return 'free'
