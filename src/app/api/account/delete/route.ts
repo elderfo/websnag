@@ -4,9 +4,22 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { createRequestLogger } from '@/lib/logger'
 import { stripe } from '@/lib/stripe'
 
-export async function POST() {
+export async function POST(req: Request) {
   const log = createRequestLogger('account-delete')
   try {
+    let body: { confirm?: boolean } = {}
+    try {
+      body = await req.json()
+    } catch {
+      // No body provided
+    }
+    if (body?.confirm !== true) {
+      return NextResponse.json(
+        { error: 'Confirmation required. Send { "confirm": true } to proceed.' },
+        { status: 400 }
+      )
+    }
+
     const supabase = await createClient()
 
     const {
@@ -41,6 +54,9 @@ export async function POST() {
         log.error({ err }, 'failed to cancel Stripe subscription')
       }
     }
+
+    // Log before deletion so audit trail exists even if delete partially fails
+    log.info({ userId: user.id, email: user.email }, 'account deletion initiated')
 
     // Delete the user via Supabase Admin Auth
     // This cascades to: profiles, endpoints, requests, usage, subscriptions

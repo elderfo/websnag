@@ -57,5 +57,19 @@ export async function updateSession(request: NextRequest) {
     }
   }
 
+  // CORS: explicitly set headers for authenticated API routes
+  const isHealthRoute = request.nextUrl.pathname.startsWith('/api/health')
+  if (isApiRoute && !isWebhookCapture && !isStripeWebhook && !isHealthRoute) {
+    const origin = request.headers.get('origin')
+    const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? ''
+
+    if (origin && isValidOrigin(origin, appUrl)) {
+      supabaseResponse.headers.set('Access-Control-Allow-Origin', origin)
+      supabaseResponse.headers.set('Access-Control-Allow-Credentials', 'true')
+      supabaseResponse.headers.set('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, DELETE')
+      supabaseResponse.headers.set('Access-Control-Allow-Headers', 'Content-Type, Authorization')
+    }
+  }
+
   return supabaseResponse
 }

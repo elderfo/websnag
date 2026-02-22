@@ -327,6 +327,8 @@ $$ LANGUAGE plpgsql SECURITY DEFINER;
 
 Enable Realtime on the `requests` table via the Supabase dashboard (Database → Replication → enable `requests` table). This is a manual step, not a migration.
 
+**Security note:** Ensure that the Supabase Realtime publication for the `requests` table has RLS enforcement enabled in the dashboard settings. Without this, users could potentially subscribe to INSERT events from endpoints they don't own. This is a dashboard configuration, not a migration.
+
 The client subscribes like this:
 
 ```typescript
