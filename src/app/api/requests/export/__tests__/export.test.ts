@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { NextRequest } from 'next/server'
 
 const mockGetUser = vi.fn()
 const mockFrom = vi.fn()
@@ -20,12 +21,12 @@ vi.mock('@/lib/logger', () => ({
 
 import { GET } from '../route'
 
-function makeRequest(params: Record<string, string> = {}): Request {
+function makeRequest(params: Record<string, string> = {}): NextRequest {
   const url = new URL('http://localhost:3000/api/requests/export')
   for (const [key, value] of Object.entries(params)) {
     url.searchParams.set(key, value)
   }
-  return new Request(url.toString(), { method: 'GET' })
+  return new NextRequest(url.toString(), { method: 'GET' })
 }
 
 const fakeRequests = [

@@ -113,7 +113,7 @@ export async function sendWelcomeEmail(email: string, username?: string): Promis
   const html = buildWelcomeEmailHtml(username)
 
   if (!apiKey) {
-    log.info({ to: email, subject }, 'welcome email (placeholder — RESEND_API_KEY not configured)')
+    log.warn({ to: email, subject }, 'welcome email skipped — RESEND_API_KEY not configured')
     log.debug({ text }, 'welcome email body')
     return
   }

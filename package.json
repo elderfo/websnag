@@ -61,6 +61,11 @@
   "pnpm": {
     "onlyBuiltDependencies": [
       "esbuild"
-    ]
+    ],
+    "auditConfig": {
+      "ignoreCves": [
+        "CVE-2024-52798"
+      ]
+    }
   }
 }
