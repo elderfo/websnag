@@ -705,6 +705,84 @@ describe('PATCH /api/endpoints/[id]', () => {
     expect(body.name).toBe('Updated')
   })
 
+  it('returns 400 with generic message for validation errors (no details leaked)', async () => {
+    const existingEndpoint = { id: 'test-id', name: 'Old', slug: 'old-slug' }
+
+    mockGetUser.mockResolvedValue({ data: { user: { id: 'user-1' } } })
+
+    const chain = createQueryChain({ data: existingEndpoint, error: null })
+    mockFrom.mockReturnValue(chain)
+
+    const { PATCH } = await import('../[id]/route')
+    const request = new NextRequest('http://localhost/api/endpoints/test-id', {
+      method: 'PATCH',
+      body: JSON.stringify({ response_code: 99 }),
+      headers: { 'Content-Type': 'application/json' },
+    })
+    const response = await PATCH(request, { params: Promise.resolve({ id: 'test-id' }) })
+
+    expect(response.status).toBe(400)
+    const body = await response.json()
+    expect(body.error).toBe('Validation failed')
+    expect(body).not.toHaveProperty('details')
+  })
+
+  it('returns 500 with generic message when update fails', async () => {
+    const existingEndpoint = { id: 'test-id', name: 'Old', slug: 'old-slug' }
+
+    mockGetUser.mockResolvedValue({ data: { user: { id: 'user-1' } } })
+
+    const fetchChain = createQueryChain({ data: existingEndpoint, error: null })
+    const updateChain = createQueryChain({
+      data: null,
+      error: { message: 'unique constraint violation on slug' },
+    })
+
+    let callCount = 0
+    mockFrom.mockImplementation(() => {
+      callCount++
+      if (callCount === 1) return fetchChain
+      return updateChain
+    })
+
+    const { PATCH } = await import('../[id]/route')
+    const request = new NextRequest('http://localhost/api/endpoints/test-id', {
+      method: 'PATCH',
+      body: JSON.stringify({ name: 'Updated' }),
+      headers: { 'Content-Type': 'application/json' },
+    })
+    const response = await PATCH(request, { params: Promise.resolve({ id: 'test-id' }) })
+
+    expect(response.status).toBe(500)
+    const body = await response.json()
+    expect(body.error).toBe('Failed to update endpoint')
+    expect(body.error).not.toContain('unique constraint')
+  })
+
+  it('returns 500 with generic message when delete fails', async () => {
+    mockGetUser.mockResolvedValue({ data: { user: { id: 'user-1' } } })
+
+    const chain = createQueryChain({
+      data: null,
+      error: { message: 'foreign key violation' },
+      count: null,
+    })
+    mockFrom.mockReturnValue(chain)
+
+    const routeModule = await import('../[id]/route')
+    const request = new NextRequest('http://localhost/api/endpoints/test-id', {
+      method: 'DELETE',
+    })
+    const response = await routeModule.DELETE(request, {
+      params: Promise.resolve({ id: 'test-id' }),
+    })
+
+    expect(response.status).toBe(500)
+    const body = await response.json()
+    expect(body.error).toBe('Failed to delete endpoint')
+    expect(body.error).not.toContain('foreign key')
+  })
+
   it('returns 400 for empty update body', async () => {
     const existingEndpoint = { id: 'test-id', name: 'Old', slug: 'old-slug' }
 

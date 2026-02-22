@@ -173,13 +173,10 @@ describe('handleWebhook (namespaced route /wh/[username]/[slug])', () => {
       return {}
     })
 
-    // Default: usage under limit
+    // Default: usage under limit (atomic check+increment)
     mockRpc.mockImplementation((fn: string) => {
-      if (fn === 'get_current_usage') {
-        return Promise.resolve({ data: [{ request_count: 5, ai_analysis_count: 0 }] })
-      }
-      if (fn === 'increment_request_count') {
-        return Promise.resolve({ data: null, error: null })
+      if (fn === 'try_increment_request_count') {
+        return Promise.resolve({ data: true, error: null })
       }
       return Promise.resolve({ data: null, error: null })
     })
@@ -271,8 +268,8 @@ describe('handleWebhook (namespaced route /wh/[username]/[slug])', () => {
 
   it('returns identical 404 when monthly request limit is exceeded (no info leakage)', async () => {
     mockRpc.mockImplementation((fn: string) => {
-      if (fn === 'get_current_usage') {
-        return Promise.resolve({ data: [{ request_count: 100, ai_analysis_count: 0 }] })
+      if (fn === 'try_increment_request_count') {
+        return Promise.resolve({ data: false, error: null })
       }
       return Promise.resolve({ data: null, error: null })
     })
@@ -336,9 +333,10 @@ describe('handleWebhook (namespaced route /wh/[username]/[slug])', () => {
       return {}
     })
 
+    // Pro users pass p_limit=0 which always returns true
     mockRpc.mockImplementation((fn: string) => {
-      if (fn === 'get_current_usage') {
-        return Promise.resolve({ data: [{ request_count: 999999, ai_analysis_count: 0 }] })
+      if (fn === 'try_increment_request_count') {
+        return Promise.resolve({ data: true, error: null })
       }
       return Promise.resolve({ data: null, error: null })
     })
@@ -347,6 +345,12 @@ describe('handleWebhook (namespaced route /wh/[username]/[slug])', () => {
     const res = await handleWebhook(req, { params })
 
     expect(res.status).toBe(200)
+
+    // Verify it was called with p_limit=0 for pro
+    expect(mockRpc).toHaveBeenCalledWith('try_increment_request_count', {
+      p_user_id: 'user-456',
+      p_limit: 0,
+    })
   })
 
   it.each(['GET', 'POST', 'PUT', 'PATCH', 'DELETE'] as const)(
@@ -387,13 +391,14 @@ describe('handleWebhook (namespaced route /wh/[username]/[slug])', () => {
     expect(insertArg.content_type).toBe('application/json')
   })
 
-  it('calls increment_request_count with correct user_id', async () => {
+  it('calls try_increment_request_count with correct user_id and free limit', async () => {
     const req = createRequest('POST', { body: '{}' })
 
     await handleWebhook(req, { params })
 
-    expect(mockRpc).toHaveBeenCalledWith('increment_request_count', {
+    expect(mockRpc).toHaveBeenCalledWith('try_increment_request_count', {
       p_user_id: 'user-456',
+      p_limit: 100,
     })
   })
 
@@ -443,7 +448,7 @@ describe('handleWebhook (namespaced route /wh/[username]/[slug])', () => {
     expect(insertArg.size_bytes).toBe(0)
   })
 
-  it('captures source IP from x-forwarded-for header', async () => {
+  it('captures and anonymizes source IP from x-forwarded-for header', async () => {
     const req = createRequest('POST', {
       body: '{}',
       headers: { 'x-forwarded-for': '1.2.3.4' },
@@ -452,10 +457,10 @@ describe('handleWebhook (namespaced route /wh/[username]/[slug])', () => {
     await handleWebhook(req, { params })
 
     const insertArg = insertChain.insert.mock.calls[0][0]
-    expect(insertArg.source_ip).toBe('1.2.3.4')
+    expect(insertArg.source_ip).toBe('1.2.3.0')
   })
 
-  it('takes the first IP from a comma-separated x-forwarded-for header', async () => {
+  it('takes the first IP from a comma-separated x-forwarded-for header and anonymizes it', async () => {
     const req = createRequest('POST', {
       body: '{}',
       headers: { 'x-forwarded-for': '1.2.3.4, 5.6.7.8, 9.10.11.12' },
@@ -464,10 +469,10 @@ describe('handleWebhook (namespaced route /wh/[username]/[slug])', () => {
     await handleWebhook(req, { params })
 
     const insertArg = insertChain.insert.mock.calls[0][0]
-    expect(insertArg.source_ip).toBe('1.2.3.4')
+    expect(insertArg.source_ip).toBe('1.2.3.0')
   })
 
-  it('falls back to x-real-ip when x-forwarded-for is absent', async () => {
+  it('falls back to x-real-ip when x-forwarded-for is absent and anonymizes it', async () => {
     const req = createRequest('POST', {
       body: '{}',
       headers: { 'x-real-ip': '9.8.7.6' },
@@ -476,7 +481,7 @@ describe('handleWebhook (namespaced route /wh/[username]/[slug])', () => {
     await handleWebhook(req, { params })
 
     const insertArg = insertChain.insert.mock.calls[0][0]
-    expect(insertArg.source_ip).toBe('9.8.7.6')
+    expect(insertArg.source_ip).toBe('9.8.7.0')
   })
 
   it('stores null source_ip when IP is unknown', async () => {
@@ -537,12 +542,9 @@ describe('handleWebhook (namespaced route /wh/[username]/[slug])', () => {
     expect(insertWithError.insert).toHaveBeenCalled()
   })
 
-  it('logs but does not fail when increment_request_count RPC errors', async () => {
+  it('returns 404 when try_increment_request_count RPC fails for free tier (fail closed)', async () => {
     mockRpc.mockImplementation((fn: string) => {
-      if (fn === 'get_current_usage') {
-        return Promise.resolve({ data: [{ request_count: 5, ai_analysis_count: 0 }] })
-      }
-      if (fn === 'increment_request_count') {
+      if (fn === 'try_increment_request_count') {
         return Promise.resolve({ data: null, error: { message: 'RPC error' } })
       }
       return Promise.resolve({ data: null, error: null })
@@ -551,7 +553,31 @@ describe('handleWebhook (namespaced route /wh/[username]/[slug])', () => {
     const req = createRequest('POST', { body: '{}' })
     const res = await handleWebhook(req, { params })
 
-    // Should still return the configured response
+    // Free tier fails closed to prevent unlimited usage on RPC error
+    expect(res.status).toBe(404)
+  })
+
+  it('still captures request when try_increment_request_count RPC fails for pro tier (fail open)', async () => {
+    subscriptionChain = setupSubscriptionQuery({ plan: 'pro', status: 'active' })
+    mockFrom.mockImplementation((table: string) => {
+      if (table === 'profiles') return profileChain
+      if (table === 'endpoints') return endpointChain
+      if (table === 'subscriptions') return subscriptionChain
+      if (table === 'requests') return insertChain
+      return {}
+    })
+
+    mockRpc.mockImplementation((fn: string) => {
+      if (fn === 'try_increment_request_count') {
+        return Promise.resolve({ data: null, error: { message: 'RPC error' } })
+      }
+      return Promise.resolve({ data: null, error: null })
+    })
+
+    const req = createRequest('POST', { body: '{}' })
+    const res = await handleWebhook(req, { params })
+
+    // Pro tier fails open — don't block paying customers
     expect(res.status).toBe(200)
   })
 
@@ -754,8 +780,8 @@ describe('handleWebhook (namespaced route /wh/[username]/[slug])', () => {
     })
 
     mockRpc.mockImplementation((fn: string) => {
-      if (fn === 'get_current_usage') {
-        return Promise.resolve({ data: [{ request_count: 100, ai_analysis_count: 0 }] })
+      if (fn === 'try_increment_request_count') {
+        return Promise.resolve({ data: false, error: null })
       }
       return Promise.resolve({ data: null, error: null })
     })
@@ -824,8 +850,8 @@ describe('slug enumeration hardening (#10)', () => {
     })
 
     mockRpc.mockImplementation((fn: string) => {
-      if (fn === 'get_current_usage') {
-        return Promise.resolve({ data: [{ request_count: 5, ai_analysis_count: 0 }] })
+      if (fn === 'try_increment_request_count') {
+        return Promise.resolve({ data: true, error: null })
       }
       return Promise.resolve({ data: null, error: null })
     })
@@ -876,8 +902,8 @@ describe('slug enumeration hardening (#10)', () => {
           return {}
         })
         mockRpc.mockImplementation((fn: string) => {
-          if (fn === 'get_current_usage') {
-            return Promise.resolve({ data: [{ request_count: 100, ai_analysis_count: 0 }] })
+          if (fn === 'try_increment_request_count') {
+            return Promise.resolve({ data: false, error: null })
           }
           return Promise.resolve({ data: null, error: null })
         })
@@ -944,11 +970,8 @@ describe('response header filtering (#62)', () => {
     insertChain = setupInsert()
 
     mockRpc.mockImplementation((fn: string) => {
-      if (fn === 'get_current_usage') {
-        return Promise.resolve({ data: [{ request_count: 5, ai_analysis_count: 0 }] })
-      }
-      if (fn === 'increment_request_count') {
-        return Promise.resolve({ data: null, error: null })
+      if (fn === 'try_increment_request_count') {
+        return Promise.resolve({ data: true, error: null })
       }
       return Promise.resolve({ data: null, error: null })
     })
@@ -986,6 +1009,167 @@ describe('response header filtering (#62)', () => {
     // Forbidden headers must NOT be present
     expect(res.headers.get('Set-Cookie')).toBeNull()
     expect(res.headers.get('Location')).toBeNull()
+  })
+})
+
+// ─────────────────────────────────────────────────────────────────────────────
+// IP anonymization (#70)
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('IP anonymization (#70)', () => {
+  let profileChain: ReturnType<typeof setupProfileQuery>
+  let endpointChain: ReturnType<typeof setupEndpointQuery>
+  let subscriptionChain: ReturnType<typeof setupSubscriptionQuery>
+  let insertChain: ReturnType<typeof setupInsert>
+
+  const params = Promise.resolve({ segments: ['johndoe', 'test-slug'] })
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+
+    profileChain = setupProfileQuery(mockProfile)
+    endpointChain = setupEndpointQuery(mockEndpoint)
+    subscriptionChain = setupSubscriptionQuery({ plan: 'free', status: 'active' })
+    insertChain = setupInsert()
+
+    mockFrom.mockImplementation((table: string) => {
+      if (table === 'profiles') return profileChain
+      if (table === 'endpoints') return endpointChain
+      if (table === 'subscriptions') return subscriptionChain
+      if (table === 'requests') return insertChain
+      return {}
+    })
+
+    mockRpc.mockImplementation((fn: string) => {
+      if (fn === 'try_increment_request_count') {
+        return Promise.resolve({ data: true, error: null })
+      }
+      return Promise.resolve({ data: null, error: null })
+    })
+
+    mockCheckSlugRateLimit.mockResolvedValue(passingRateLimit)
+    mockCheckIpRateLimit.mockResolvedValue({ ...passingRateLimit, limit: 200 })
+  })
+
+  it('zeroes the last octet of IPv4 addresses', async () => {
+    const req = createRequest('POST', {
+      body: '{}',
+      headers: { 'x-forwarded-for': '192.168.1.42' },
+    })
+
+    await handleWebhook(req, { params })
+
+    const insertArg = insertChain.insert.mock.calls[0][0]
+    expect(insertArg.source_ip).toBe('192.168.1.0')
+  })
+
+  it('truncates IPv6 addresses to first 3 groups', async () => {
+    const req = createRequest('POST', {
+      body: '{}',
+      headers: { 'x-forwarded-for': '2001:0db8:85a3:0000:0000:8a2e:0370:7334' },
+    })
+
+    await handleWebhook(req, { params })
+
+    const insertArg = insertChain.insert.mock.calls[0][0]
+    expect(insertArg.source_ip).toBe('2001:0db8:85a3:0:0:0:0:0')
+  })
+
+  it('stores null for unknown IPs', async () => {
+    const req = createRequest('POST', { body: '{}' })
+
+    await handleWebhook(req, { params })
+
+    const insertArg = insertChain.insert.mock.calls[0][0]
+    expect(insertArg.source_ip).toBeNull()
+  })
+})
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 3xx redirect abuse prevention (#75)
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('3xx redirect abuse prevention (#75)', () => {
+  let profileChain: ReturnType<typeof setupProfileQuery>
+  let endpointChain: ReturnType<typeof setupEndpointQuery>
+  let subscriptionChain: ReturnType<typeof setupSubscriptionQuery>
+  let insertChain: ReturnType<typeof setupInsert>
+
+  const params = Promise.resolve({ segments: ['johndoe', 'test-slug'] })
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+
+    profileChain = setupProfileQuery(mockProfile)
+    subscriptionChain = setupSubscriptionQuery({ plan: 'free', status: 'active' })
+    insertChain = setupInsert()
+
+    mockRpc.mockImplementation((fn: string) => {
+      if (fn === 'try_increment_request_count') {
+        return Promise.resolve({ data: true, error: null })
+      }
+      return Promise.resolve({ data: null, error: null })
+    })
+
+    mockCheckSlugRateLimit.mockResolvedValue(passingRateLimit)
+    mockCheckIpRateLimit.mockResolvedValue({ ...passingRateLimit, limit: 200 })
+  })
+
+  it.each([300, 301, 302, 303, 307, 308, 399])(
+    'overrides stored %d status code to 200',
+    async (code) => {
+      const redirectEndpoint = { ...mockEndpoint, response_code: code }
+      endpointChain = setupEndpointQuery(redirectEndpoint)
+
+      mockFrom.mockImplementation((table: string) => {
+        if (table === 'profiles') return profileChain
+        if (table === 'endpoints') return endpointChain
+        if (table === 'subscriptions') return subscriptionChain
+        if (table === 'requests') return insertChain
+        return {}
+      })
+
+      const req = createRequest('POST', { body: '{}' })
+      const res = await handleWebhook(req, { params })
+
+      expect(res.status).toBe(200)
+    }
+  )
+
+  it('does not override non-3xx status codes', async () => {
+    const endpoint202 = { ...mockEndpoint, response_code: 202 }
+    endpointChain = setupEndpointQuery(endpoint202)
+
+    mockFrom.mockImplementation((table: string) => {
+      if (table === 'profiles') return profileChain
+      if (table === 'endpoints') return endpointChain
+      if (table === 'subscriptions') return subscriptionChain
+      if (table === 'requests') return insertChain
+      return {}
+    })
+
+    const req = createRequest('POST', { body: '{}' })
+    const res = await handleWebhook(req, { params })
+
+    expect(res.status).toBe(202)
+  })
+
+  it('does not override 4xx status codes', async () => {
+    const endpoint400 = { ...mockEndpoint, response_code: 400 }
+    endpointChain = setupEndpointQuery(endpoint400)
+
+    mockFrom.mockImplementation((table: string) => {
+      if (table === 'profiles') return profileChain
+      if (table === 'endpoints') return endpointChain
+      if (table === 'subscriptions') return subscriptionChain
+      if (table === 'requests') return insertChain
+      return {}
+    })
+
+    const req = createRequest('POST', { body: '{}' })
+    const res = await handleWebhook(req, { params })
+
+    expect(res.status).toBe(400)
   })
 })
 
