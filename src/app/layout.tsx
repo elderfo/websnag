@@ -13,6 +13,7 @@ const geistMono = Geist_Mono({
 })
 
 export const metadata: Metadata = {
+  metadataBase: new URL(process.env.NEXT_PUBLIC_APP_URL ?? 'https://websnag.dev'),
   title: 'Websnag — AI-Powered Webhook Debugger',
   description: 'Your webhooks, decoded.',
   openGraph: {
