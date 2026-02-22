@@ -18,6 +18,10 @@ export function timeAgo(date: string): string {
   return `${days}d ago`
 }
 
+function escapeShellDoubleQuote(s: string): string {
+  return s.replace(/[\\"`$!]/g, '\\$&')
+}
+
 export function generateCurlCommand(
   request: {
     method: string
@@ -46,7 +50,7 @@ export function generateCurlCommand(
   for (const [key, value] of Object.entries(request.headers)) {
     const lower = key.toLowerCase()
     if (skipPrefixes.some((prefix) => lower.startsWith(prefix))) continue
-    parts.push(`  -H "${key}: ${value}"`)
+    parts.push(`  -H "${escapeShellDoubleQuote(key)}: ${escapeShellDoubleQuote(value)}"`)
   }
 
   if (request.body) {
