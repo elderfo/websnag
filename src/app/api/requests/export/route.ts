@@ -37,10 +37,7 @@ export async function GET(req: NextRequest) {
   })
 
   if (!parsed.success) {
-    return NextResponse.json(
-      { error: 'Invalid request', details: parsed.error.issues },
-      { status: 400 }
-    )
+    return NextResponse.json({ error: 'Invalid request' }, { status: 400 })
   }
 
   const { endpointId, method, dateFrom, dateTo, search } = parsed.data
@@ -65,7 +62,7 @@ export async function GET(req: NextRequest) {
     )
     .eq('endpoint_id', endpointId)
     .order('received_at', { ascending: false })
-    .limit(10000)
+    .limit(1000)
 
   if (method) {
     query = query.eq('method', method)

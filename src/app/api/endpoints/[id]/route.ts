@@ -66,10 +66,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
 
   const parsed = updateEndpointSchema.safeParse(body)
   if (!parsed.success) {
-    return NextResponse.json(
-      { error: 'Validation failed', details: parsed.error.flatten() },
-      { status: 400 }
-    )
+    return NextResponse.json({ error: 'Validation failed' }, { status: 400 })
   }
 
   // If slug is being changed, validate and check uniqueness
@@ -138,7 +135,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
 
   if (updateError) {
     log.error({ err: updateError, endpointId: id }, 'endpoint update failed')
-    return NextResponse.json({ error: updateError.message }, { status: 500 })
+    return NextResponse.json({ error: 'Failed to update endpoint' }, { status: 500 })
   }
 
   log.info({ endpointId: id, fields: Object.keys(updateData) }, 'endpoint updated')
@@ -174,7 +171,7 @@ export async function DELETE(
 
   if (error) {
     log.error({ err: error, endpointId: id }, 'endpoint deletion failed')
-    return NextResponse.json({ error: error.message }, { status: 500 })
+    return NextResponse.json({ error: 'Failed to delete endpoint' }, { status: 500 })
   }
 
   if (count === 0) {

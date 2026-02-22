@@ -48,11 +48,15 @@ describe('POST /api/requests/bulk-delete', () => {
     expect(res.status).toBe(401)
   })
 
-  it('returns 400 for invalid body (empty array)', async () => {
+  it('returns 400 for invalid body without leaking validation details', async () => {
     mockGetUser.mockResolvedValue({ data: { user: { id: 'user-1' } } })
 
     const res = await POST(makeRequest({ requestIds: [] }))
     expect(res.status).toBe(400)
+
+    const data = await res.json()
+    expect(data.error).toBe('Invalid request')
+    expect(data).not.toHaveProperty('details')
   })
 
   it('returns 400 when more than 100 IDs are provided', async () => {
