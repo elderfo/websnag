@@ -69,10 +69,12 @@ export async function POST(req: Request) {
       }
     )
 
-    if (usageError || withinLimit !== true) {
-      if (usageError) {
-        log.error({ err: usageError, userId: user.id }, 'AI analysis usage check failed')
-      }
+    if (usageError) {
+      log.error({ err: usageError, userId: user.id }, 'AI analysis usage check failed')
+      return NextResponse.json({ error: 'AI analysis usage check unavailable' }, { status: 503 })
+    }
+
+    if (withinLimit !== true) {
       return NextResponse.json({ error: 'AI analysis limit reached' }, { status: 429 })
     }
 

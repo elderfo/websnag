@@ -146,7 +146,7 @@ describe('POST /api/analyze', () => {
     expect(res.status).toBe(429)
   })
 
-  it('returns 429 when atomic usage RPC fails (fail closed)', async () => {
+  it('returns 503 when atomic usage RPC fails (fail closed)', async () => {
     mockGetUser.mockResolvedValue({ data: { user: { id: 'user-1' } } })
 
     mockFrom.mockImplementation((table: string) => {
@@ -175,7 +175,10 @@ describe('POST /api/analyze', () => {
     mockAdminRpc.mockResolvedValue({ data: null, error: { message: 'RPC error' } })
 
     const res = await POST(makeRequest({ requestId: '123e4567-e89b-12d3-a456-426614174000' }))
-    expect(res.status).toBe(429)
+    expect(res.status).toBe(503)
+
+    const data = await res.json()
+    expect(data.error).toBe('AI analysis usage check unavailable')
   })
 
   it('returns analysis on success', async () => {
