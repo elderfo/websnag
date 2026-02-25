@@ -54,6 +54,12 @@ vi.mock('@/lib/audit', () => ({
   logAuditEvent: vi.fn(),
 }))
 
+vi.mock('@/lib/rate-limit', () => ({
+  checkApiRateLimit: vi
+    .fn()
+    .mockResolvedValue({ success: true, limit: 60, remaining: 59, reset: Date.now() + 60_000 }),
+}))
+
 import { POST } from './route'
 import { getUserPlan } from '@/lib/usage'
 

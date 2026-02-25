@@ -47,6 +47,12 @@ vi.mock('@/lib/audit', () => ({
   logAuditEvent: vi.fn(),
 }))
 
+vi.mock('@/lib/rate-limit', () => ({
+  checkApiRateLimit: vi
+    .fn()
+    .mockResolvedValue({ success: true, limit: 20, remaining: 19, reset: Date.now() + 60_000 }),
+}))
+
 function makeRequest(body: unknown): Request {
   return new Request('http://localhost:3000/api/analyze', {
     method: 'POST',
@@ -133,8 +139,40 @@ describe('POST /api/analyze', () => {
       return { select: () => ({ eq: () => ({ single: () => Promise.resolve({ data: null }) }) }) }
     })
 
-    // Usage at limit (free = 5)
-    mockAdminRpc.mockResolvedValue({ data: [{ ai_analysis_count: 5 }] })
+    // Atomic check returns false (over limit)
+    mockAdminRpc.mockResolvedValue({ data: false, error: null })
+
+    const res = await POST(makeRequest({ requestId: '123e4567-e89b-12d3-a456-426614174000' }))
+    expect(res.status).toBe(429)
+  })
+
+  it('returns 429 when atomic usage RPC fails (fail closed)', async () => {
+    mockGetUser.mockResolvedValue({ data: { user: { id: 'user-1' } } })
+
+    mockFrom.mockImplementation((table: string) => {
+      if (table === 'requests') {
+        return {
+          select: () => ({
+            eq: () => ({
+              single: () => Promise.resolve({ data: mockWebhookRequest }),
+            }),
+          }),
+        }
+      }
+      if (table === 'subscriptions') {
+        return {
+          select: () => ({
+            eq: () => ({
+              single: () => Promise.resolve({ data: { plan: 'free', status: 'active' } }),
+            }),
+          }),
+        }
+      }
+      return { select: () => ({ eq: () => ({ single: () => Promise.resolve({ data: null }) }) }) }
+    })
+
+    // RPC error — should fail closed
+    mockAdminRpc.mockResolvedValue({ data: null, error: { message: 'RPC error' } })
 
     const res = await POST(makeRequest({ requestId: '123e4567-e89b-12d3-a456-426614174000' }))
     expect(res.status).toBe(429)
@@ -165,8 +203,8 @@ describe('POST /api/analyze', () => {
       return { select: () => ({ eq: () => ({ single: () => Promise.resolve({ data: null }) }) }) }
     })
 
-    // Usage under limit
-    mockAdminRpc.mockResolvedValue({ data: [{ ai_analysis_count: 2 }] })
+    // Atomic check returns true (within limit)
+    mockAdminRpc.mockResolvedValue({ data: true, error: null })
 
     // Admin update call
     mockAdminFrom.mockImplementation(() => ({
@@ -190,6 +228,12 @@ describe('POST /api/analyze', () => {
       '{"type":"payment_intent.succeeded"}',
       'application/json'
     )
+
+    // Verify atomic RPC was called with correct limit (free = 5)
+    expect(mockAdminRpc).toHaveBeenCalledWith('try_increment_ai_analysis_count', {
+      p_user_id: 'user-1',
+      p_limit: 5,
+    })
   })
 
   it('returns 502 with service unavailable when Anthropic API fails', async () => {
@@ -217,8 +261,8 @@ describe('POST /api/analyze', () => {
       return { select: () => ({ eq: () => ({ single: () => Promise.resolve({ data: null }) }) }) }
     })
 
-    // Usage under limit
-    mockAdminRpc.mockResolvedValue({ data: [{ ai_analysis_count: 2 }] })
+    // Atomic check returns true (within limit)
+    mockAdminRpc.mockResolvedValue({ data: true, error: null })
 
     // Anthropic API error (e.g., rate limit)
     const { APIError } = await import('@anthropic-ai/sdk')
@@ -256,8 +300,8 @@ describe('POST /api/analyze', () => {
       return { select: () => ({ eq: () => ({ single: () => Promise.resolve({ data: null }) }) }) }
     })
 
-    // Usage under limit
-    mockAdminRpc.mockResolvedValue({ data: [{ ai_analysis_count: 2 }] })
+    // Atomic check returns true (within limit)
+    mockAdminRpc.mockResolvedValue({ data: true, error: null })
 
     // AI returns invalid response
     mockAnalyzeWebhook.mockRejectedValue(new Error('Unexpected end of JSON input'))

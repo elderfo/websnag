@@ -30,6 +30,31 @@ export const MAX_AI_BODY_LENGTH = 50_000
 export const MAX_AI_HEADERS_LENGTH = 5_000
 const MAX_AI_HEADER_COUNT = 100
 
+const SENSITIVE_HEADER_KEYS = new Set([
+  'authorization',
+  'cookie',
+  'set-cookie',
+  'x-api-key',
+  'stripe-signature',
+  'x-hub-signature',
+  'x-hub-signature-256',
+  'x-shopify-hmac-sha256',
+  'x-webhook-secret',
+  'proxy-authorization',
+])
+
+function redactSensitiveHeaders(headers: Record<string, string>): Record<string, string> {
+  const redacted: Record<string, string> = {}
+  for (const [key, value] of Object.entries(headers)) {
+    if (SENSITIVE_HEADER_KEYS.has(key.toLowerCase())) {
+      redacted[key] = '[REDACTED]'
+    } else {
+      redacted[key] = value
+    }
+  }
+  return redacted
+}
+
 export async function analyzeWebhook(
   method: string,
   headers: Record<string, string>,
@@ -41,7 +66,10 @@ export async function analyzeWebhook(
       ? body.slice(0, MAX_AI_BODY_LENGTH) + `\n...(truncated, ${body.length} chars total)`
       : body
 
-  const limitedHeaders = Object.fromEntries(Object.entries(headers).slice(0, MAX_AI_HEADER_COUNT))
+  const safeHeaders = redactSensitiveHeaders(headers)
+  const limitedHeaders = Object.fromEntries(
+    Object.entries(safeHeaders).slice(0, MAX_AI_HEADER_COUNT)
+  )
   const headersStr = JSON.stringify(limitedHeaders, null, 2)
   const truncatedHeaders =
     headersStr.length > MAX_AI_HEADERS_LENGTH

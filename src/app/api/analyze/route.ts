@@ -4,9 +4,11 @@ import { createRequestLogger } from '@/lib/logger'
 import { logAuditEvent } from '@/lib/audit'
 import { analyzeWebhook } from '@/lib/anthropic'
 import { analyzeRequestSchema } from '@/lib/validators'
-import { canAnalyze, getUserPlan } from '@/lib/usage'
+import { getUserPlan } from '@/lib/usage'
+import { checkApiRateLimit } from '@/lib/rate-limit'
 import { NextResponse } from 'next/server'
 import { APIError } from '@anthropic-ai/sdk'
+import { LIMITS } from '@/types'
 import type { AiAnalysis } from '@/types'
 
 export async function POST(req: Request) {
@@ -41,7 +43,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Request not found' }, { status: 404 })
     }
 
-    // Check AI analysis usage limits
+    // Check AI analysis usage limits (atomic check + increment to prevent race conditions)
     const { data: subscription } = await supabase
       .from('subscriptions')
       .select('plan, status')
@@ -50,11 +52,27 @@ export async function POST(req: Request) {
 
     const plan = getUserPlan(subscription)
 
-    const admin = createAdminClient()
-    const { data: usageData } = await admin.rpc('get_current_usage', { p_user_id: user.id })
+    // Per-user API rate limit
+    const rateLimit = await checkApiRateLimit(user.id, plan)
+    if (rateLimit && !rateLimit.success) {
+      return NextResponse.json({ error: 'Too many requests' }, { status: 429 })
+    }
 
-    const currentAnalyses = usageData?.[0]?.ai_analysis_count ?? 0
-    if (!canAnalyze(currentAnalyses, plan)) {
+    const analysisLimit = plan === 'pro' ? 0 : LIMITS.free.maxAiAnalysesPerMonth
+
+    const admin = createAdminClient()
+    const { data: withinLimit, error: usageError } = await admin.rpc(
+      'try_increment_ai_analysis_count',
+      {
+        p_user_id: user.id,
+        p_limit: analysisLimit,
+      }
+    )
+
+    if (usageError || withinLimit !== true) {
+      if (usageError) {
+        log.error({ err: usageError, userId: user.id }, 'AI analysis usage check failed')
+      }
       return NextResponse.json({ error: 'AI analysis limit reached' }, { status: 429 })
     }
 
@@ -87,15 +105,6 @@ export async function POST(req: Request) {
 
     if (updateError) {
       log.error({ err: updateError, requestId }, 'failed to store analysis result')
-    }
-
-    // Increment usage
-    const { error: rpcError } = await admin.rpc('increment_ai_analysis_count', {
-      p_user_id: user.id,
-    })
-
-    if (rpcError) {
-      log.error({ err: rpcError, userId: user.id }, 'failed to increment AI analysis count')
     }
 
     log.info({ requestId, userId: user.id, source: analysis.source }, 'AI analysis completed')
