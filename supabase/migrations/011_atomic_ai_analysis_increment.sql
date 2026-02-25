@@ -29,3 +29,4 @@ $$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
 REVOKE EXECUTE ON FUNCTION try_increment_ai_analysis_count(UUID, INT) FROM public;
 REVOKE EXECUTE ON FUNCTION try_increment_ai_analysis_count(UUID, INT) FROM anon;
 REVOKE EXECUTE ON FUNCTION try_increment_ai_analysis_count(UUID, INT) FROM authenticated;
+GRANT EXECUTE ON FUNCTION try_increment_ai_analysis_count(UUID, INT) TO service_role;
