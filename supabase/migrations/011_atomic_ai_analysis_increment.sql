@@ -9,19 +9,31 @@
 CREATE OR REPLACE FUNCTION try_increment_ai_analysis_count(p_user_id UUID, p_limit INT)
 RETURNS BOOLEAN AS $$
 DECLARE
-  current INT;
+  current_month TEXT := to_char(now(), 'YYYY-MM');
 BEGIN
-  INSERT INTO usage (user_id, month, ai_analysis_count)
-  VALUES (p_user_id, to_char(now(), 'YYYY-MM'), 1)
-  ON CONFLICT (user_id, month)
-  DO UPDATE SET ai_analysis_count = usage.ai_analysis_count + 1
-  RETURNING ai_analysis_count INTO current;
-
+  -- Unlimited usage: still track counts, but no limit check.
   IF p_limit <= 0 THEN
+    INSERT INTO usage (user_id, month, ai_analysis_count)
+    VALUES (p_user_id, current_month, 1)
+    ON CONFLICT (user_id, month)
+    DO UPDATE SET ai_analysis_count = usage.ai_analysis_count + 1;
+
     RETURN TRUE;
   END IF;
 
-  RETURN current <= p_limit;
+  -- Limited usage: only increment when current count is below the limit.
+  INSERT INTO usage (user_id, month, ai_analysis_count)
+  VALUES (p_user_id, current_month, 1)
+  ON CONFLICT (user_id, month)
+  DO UPDATE SET ai_analysis_count = usage.ai_analysis_count + 1
+    WHERE usage.ai_analysis_count < p_limit;
+
+  -- If no row was inserted/updated, the user is already at or over the limit.
+  IF NOT FOUND THEN
+    RETURN FALSE;
+  END IF;
+
+  RETURN TRUE;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
 
