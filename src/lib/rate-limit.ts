@@ -288,10 +288,7 @@ function getApiLimiter(plan: Plan): Ratelimit | null {
   return apiProLimiter
 }
 
-export async function checkApiRateLimit(
-  userId: string,
-  plan: Plan
-): Promise<RateLimitResult | null> {
+export async function checkApiRateLimit(userId: string, plan: Plan): Promise<RateLimitResult> {
   const fallback = plan === 'free' ? fallbackApiFreeLimiter : fallbackApiProLimiter
 
   const limiter = getApiLimiter(plan)

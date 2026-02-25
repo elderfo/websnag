@@ -83,7 +83,7 @@ export async function POST(req: Request) {
 
     // Per-user API rate limit
     const rateLimit = await checkApiRateLimit(user.id, plan)
-    if (rateLimit && !rateLimit.success) {
+    if (!rateLimit.success) {
       return NextResponse.json({ error: 'Too many requests' }, { status: 429 })
     }
 
