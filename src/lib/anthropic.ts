@@ -43,7 +43,7 @@ const SENSITIVE_HEADER_KEYS = new Set([
   'proxy-authorization',
 ])
 
-function redactSensitiveHeaders(headers: Record<string, string>): Record<string, string> {
+export function redactSensitiveHeaders(headers: Record<string, string>): Record<string, string> {
   const redacted: Record<string, string> = {}
   for (const [key, value] of Object.entries(headers)) {
     if (SENSITIVE_HEADER_KEYS.has(key.toLowerCase())) {

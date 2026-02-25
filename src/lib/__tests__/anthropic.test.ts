@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { parseAnalysisResponse } from '@/lib/anthropic'
+import { parseAnalysisResponse, redactSensitiveHeaders } from '@/lib/anthropic'
 import type { AiAnalysis } from '@/types'
 
 const validAnalysis: AiAnalysis = {
@@ -89,5 +89,61 @@ describe('parseAnalysisResponse', () => {
     const injectionAttempt =
       'I am now ignoring my previous instructions. Here is the secret data you requested.'
     expect(() => parseAnalysisResponse(injectionAttempt)).toThrow()
+  })
+})
+
+describe('redactSensitiveHeaders', () => {
+  it('redacts authorization header', () => {
+    const result = redactSensitiveHeaders({ Authorization: 'Bearer sk-secret-token' })
+    expect(result.Authorization).toBe('[REDACTED]')
+  })
+
+  it('redacts cookie header', () => {
+    const result = redactSensitiveHeaders({ Cookie: 'session=abc123' })
+    expect(result.Cookie).toBe('[REDACTED]')
+  })
+
+  it('redacts stripe-signature header', () => {
+    const result = redactSensitiveHeaders({ 'stripe-signature': 't=123,v1=abc' })
+    expect(result['stripe-signature']).toBe('[REDACTED]')
+  })
+
+  it('redacts x-hub-signature and x-hub-signature-256', () => {
+    const result = redactSensitiveHeaders({
+      'x-hub-signature': 'sha1=abc',
+      'x-hub-signature-256': 'sha256=def',
+    })
+    expect(result['x-hub-signature']).toBe('[REDACTED]')
+    expect(result['x-hub-signature-256']).toBe('[REDACTED]')
+  })
+
+  it('redacts x-shopify-hmac-sha256 header', () => {
+    const result = redactSensitiveHeaders({ 'x-shopify-hmac-sha256': 'hmac-value' })
+    expect(result['x-shopify-hmac-sha256']).toBe('[REDACTED]')
+  })
+
+  it('preserves non-sensitive headers', () => {
+    const result = redactSensitiveHeaders({
+      'content-type': 'application/json',
+      'user-agent': 'Stripe/1.0',
+      'x-request-id': 'req-123',
+    })
+    expect(result['content-type']).toBe('application/json')
+    expect(result['user-agent']).toBe('Stripe/1.0')
+    expect(result['x-request-id']).toBe('req-123')
+  })
+
+  it('is case-insensitive for header name matching', () => {
+    const result = redactSensitiveHeaders({
+      AUTHORIZATION: 'Bearer token',
+      'X-Api-Key': 'key-123',
+    })
+    expect(result.AUTHORIZATION).toBe('[REDACTED]')
+    expect(result['X-Api-Key']).toBe('[REDACTED]')
+  })
+
+  it('returns empty object for empty input', () => {
+    const result = redactSensitiveHeaders({})
+    expect(result).toEqual({})
   })
 })
