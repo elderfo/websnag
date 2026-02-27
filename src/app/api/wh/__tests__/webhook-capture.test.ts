@@ -34,10 +34,17 @@ vi.mock('@/lib/logger', () => ({
 // Mock the rate limit module
 const mockCheckSlugRateLimit = vi.fn()
 const mockCheckIpRateLimit = vi.fn()
+const mockCheckAccountRateLimit = vi.fn()
+
+const passingFallback = { success: true, limit: 100, remaining: 99, reset: Date.now() + 60_000 }
 
 vi.mock('@/lib/rate-limit', () => ({
   checkSlugRateLimit: (...args: unknown[]) => mockCheckSlugRateLimit(...args),
   checkIpRateLimit: (...args: unknown[]) => mockCheckIpRateLimit(...args),
+  checkAccountRateLimit: (...args: unknown[]) => mockCheckAccountRateLimit(...args),
+  fallbackSlugCheck: () => passingFallback,
+  fallbackIpCheck: () => passingFallback,
+  fallbackAccountCheck: () => passingFallback,
 }))
 
 // Import the handler after mocking — use the new [...segments] catch-all route
@@ -184,6 +191,7 @@ describe('handleWebhook (namespaced route /wh/[username]/[slug])', () => {
     // Default: rate limits pass
     mockCheckSlugRateLimit.mockResolvedValue(passingRateLimit)
     mockCheckIpRateLimit.mockResolvedValue({ ...passingRateLimit, limit: 200 })
+    mockCheckAccountRateLimit.mockResolvedValue({ ...passingRateLimit, limit: 100 })
   })
 
   const params = Promise.resolve({ segments: ['johndoe', 'test-slug'] })
@@ -797,6 +805,7 @@ describe('handleWebhook (namespaced route /wh/[username]/[slug])', () => {
   it('allows request through when rate limiter returns null (Redis unavailable)', async () => {
     mockCheckSlugRateLimit.mockResolvedValue(null)
     mockCheckIpRateLimit.mockResolvedValue(null)
+    mockCheckAccountRateLimit.mockResolvedValue(null)
 
     const req = createRequest('POST', {
       body: '{}',
@@ -859,6 +868,7 @@ describe('slug enumeration hardening (#10)', () => {
     // Disable rate limit headers so comparison is clean
     mockCheckSlugRateLimit.mockResolvedValue(null)
     mockCheckIpRateLimit.mockResolvedValue(null)
+    mockCheckAccountRateLimit.mockResolvedValue(null)
   })
 
   async function capture404Response(
@@ -978,6 +988,7 @@ describe('response header filtering (#62)', () => {
 
     mockCheckSlugRateLimit.mockResolvedValue(passingRateLimit)
     mockCheckIpRateLimit.mockResolvedValue({ ...passingRateLimit, limit: 200 })
+    mockCheckAccountRateLimit.mockResolvedValue({ ...passingRateLimit, limit: 100 })
   })
 
   it('filters forbidden headers (Set-Cookie, Location) from user-configured response', async () => {
@@ -1049,6 +1060,7 @@ describe('IP anonymization (#70)', () => {
 
     mockCheckSlugRateLimit.mockResolvedValue(passingRateLimit)
     mockCheckIpRateLimit.mockResolvedValue({ ...passingRateLimit, limit: 200 })
+    mockCheckAccountRateLimit.mockResolvedValue({ ...passingRateLimit, limit: 100 })
   })
 
   it('zeroes the last octet of IPv4 addresses', async () => {
@@ -1113,6 +1125,7 @@ describe('3xx redirect abuse prevention (#75)', () => {
 
     mockCheckSlugRateLimit.mockResolvedValue(passingRateLimit)
     mockCheckIpRateLimit.mockResolvedValue({ ...passingRateLimit, limit: 200 })
+    mockCheckAccountRateLimit.mockResolvedValue({ ...passingRateLimit, limit: 100 })
   })
 
   it.each([300, 301, 302, 303, 307, 308, 399])(

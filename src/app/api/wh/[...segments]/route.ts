@@ -4,6 +4,9 @@ import {
   checkSlugRateLimit,
   checkIpRateLimit,
   checkAccountRateLimit,
+  fallbackSlugCheck,
+  fallbackIpCheck,
+  fallbackAccountCheck,
   RateLimitResult,
 } from '@/lib/rate-limit'
 import { isAllowedResponseHeader } from '@/lib/security'
@@ -243,8 +246,41 @@ async function handleWebhookCapture(
       )
     }
   } catch (error) {
-    // Fail open: if rate limiting itself throws, allow the request
-    log.error({ err: error }, 'rate limiting check failed, allowing request')
+    log.error({ err: error }, 'rate limiting check failed, using in-memory fallback')
+    const slugResult = fallbackSlugCheck(slug)
+    const ipResult = sourceIp !== 'unknown' ? fallbackIpCheck(sourceIp) : null
+
+    if (slugResult) allRateLimitResults.push(slugResult)
+    if (ipResult) allRateLimitResults.push(ipResult)
+    primaryResult = selectMostRestrictive(allRateLimitResults)
+
+    if (!slugResult.success) {
+      const retryAfterMs = Math.max(0, slugResult.reset - Date.now())
+      const retryAfterSecs = Math.ceil(retryAfterMs / 1000)
+      const rlHeaders = new Headers({
+        'Retry-After': String(retryAfterSecs),
+        'X-RateLimit-Limit': String(slugResult.limit),
+        'X-RateLimit-Remaining': String(slugResult.remaining),
+      })
+      return NextResponse.json(
+        { error: 'Rate limit exceeded' },
+        { status: 429, headers: rlHeaders }
+      )
+    }
+
+    if (ipResult && !ipResult.success) {
+      const retryAfterMs = Math.max(0, ipResult.reset - Date.now())
+      const retryAfterSecs = Math.ceil(retryAfterMs / 1000)
+      const rlHeaders = new Headers({
+        'Retry-After': String(retryAfterSecs),
+        'X-RateLimit-Limit': String(ipResult.limit),
+        'X-RateLimit-Remaining': String(ipResult.remaining),
+      })
+      return NextResponse.json(
+        { error: 'Rate limit exceeded' },
+        { status: 429, headers: rlHeaders }
+      )
+    }
   }
 
   const supabase = createAdminClient()
@@ -322,11 +358,26 @@ async function handleWebhookCapture(
       }
     }
   } catch (error) {
-    // Fail open: if rate limiting itself throws, allow the request
     log.error(
       { err: error, userId: profile.id },
-      'account rate limiting check failed, allowing request'
+      'account rate limiting check failed, using in-memory fallback'
     )
+    const accountResult = fallbackAccountCheck(profile.id, plan)
+    allRateLimitResults.push(accountResult)
+
+    if (!accountResult.success) {
+      const retryAfterMs = Math.max(0, accountResult.reset - Date.now())
+      const retryAfterSecs = Math.ceil(retryAfterMs / 1000)
+      const rlHeaders = new Headers({
+        'Retry-After': String(retryAfterSecs),
+        'X-RateLimit-Limit': String(accountResult.limit),
+        'X-RateLimit-Remaining': String(accountResult.remaining),
+      })
+      return NextResponse.json(
+        { error: 'Rate limit exceeded' },
+        { status: 429, headers: rlHeaders }
+      )
+    }
   }
 
   // Select the most restrictive rate limit result across all active limiters

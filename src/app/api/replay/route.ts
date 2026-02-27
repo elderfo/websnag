@@ -3,13 +3,14 @@ import { createRequestLogger } from '@/lib/logger'
 import { logAuditEvent } from '@/lib/audit'
 import { replayRequestSchema } from '@/lib/validators'
 import { getUserPlan } from '@/lib/usage'
+import { checkApiRateLimit } from '@/lib/rate-limit'
 import { validateTargetUrl } from '@/lib/url-validator'
 import { NextResponse } from 'next/server'
 
 const REPLAY_TIMEOUT = 10_000 // 10 seconds
 const MAX_RESPONSE_BODY = 102_400 // 100KB
 
-// Headers to NOT forward
+// Headers to NOT forward — includes hop-by-hop, proxy, and sensitive auth headers
 const SKIP_HEADERS = new Set([
   'host',
   'connection',
@@ -28,6 +29,14 @@ const SKIP_HEADERS = new Set([
   'cf-ray',
   'cf-visitor',
   'cdn-loop',
+  // Sensitive auth headers — prevent credential forwarding to arbitrary targets
+  'authorization',
+  'cookie',
+  'x-api-key',
+  'stripe-signature',
+  'x-hub-signature',
+  'x-hub-signature-256',
+  'x-shopify-hmac-sha256',
 ])
 
 export async function POST(req: Request) {
@@ -70,6 +79,12 @@ export async function POST(req: Request) {
     const plan = getUserPlan(subscription)
     if (plan !== 'pro') {
       return NextResponse.json({ error: 'Replay is a Pro feature' }, { status: 403 })
+    }
+
+    // Per-user API rate limit
+    const rateLimit = await checkApiRateLimit(user.id, plan)
+    if (!rateLimit.success) {
+      return NextResponse.json({ error: 'Too many requests' }, { status: 429 })
     }
 
     // Fetch the request and verify ownership

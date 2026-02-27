@@ -66,6 +66,14 @@ const fallbackIpLimiter = new InMemoryRateLimiter(200, 60_000)
 const fallbackAccountFreeLimiter = new InMemoryRateLimiter(ACCOUNT_RATE_LIMITS.free, 60_000)
 const fallbackAccountProLimiter = new InMemoryRateLimiter(ACCOUNT_RATE_LIMITS.pro, 60_000)
 
+export const API_RATE_LIMITS: Record<Plan, number> = {
+  free: 20,
+  pro: 60,
+} as const
+
+const fallbackApiFreeLimiter = new InMemoryRateLimiter(API_RATE_LIMITS.free, 60_000)
+const fallbackApiProLimiter = new InMemoryRateLimiter(API_RATE_LIMITS.pro, 60_000)
+
 // Module-level lazy singletons — initialized once on first use
 let redis: Redis | null = null
 let slugLimiter: Ratelimit | null = null
@@ -236,5 +244,68 @@ export async function checkAccountRateLimit(
   } catch (error) {
     log.error({ err: error, userId }, 'checkAccountRateLimit failed, using in-memory fallback')
     return (plan === 'free' ? fallbackAccountFreeLimiter : fallbackAccountProLimiter).check(userId)
+  }
+}
+
+// In-memory fallback checks — used when the primary rate-limit path throws unexpectedly
+export function fallbackSlugCheck(slug: string): RateLimitResult {
+  return fallbackSlugLimiter.check(slug)
+}
+
+export function fallbackIpCheck(ip: string): RateLimitResult {
+  return fallbackIpLimiter.check(ip)
+}
+
+export function fallbackAccountCheck(userId: string, plan: Plan): RateLimitResult {
+  return (plan === 'free' ? fallbackAccountFreeLimiter : fallbackAccountProLimiter).check(userId)
+}
+
+// Per-user rate limit for authenticated API routes (analyze, replay, etc.)
+let apiFreeLimiter: Ratelimit | null = null
+let apiProLimiter: Ratelimit | null = null
+
+function getApiLimiter(plan: Plan): Ratelimit | null {
+  if (plan === 'free') {
+    if (apiFreeLimiter !== null) return apiFreeLimiter
+    const client = getRedis()
+    if (!client) return null
+    apiFreeLimiter = new Ratelimit({
+      redis: client,
+      limiter: Ratelimit.slidingWindow(API_RATE_LIMITS.free, '1 m'),
+      prefix: 'rl:api',
+    })
+    return apiFreeLimiter
+  }
+
+  if (apiProLimiter !== null) return apiProLimiter
+  const client = getRedis()
+  if (!client) return null
+  apiProLimiter = new Ratelimit({
+    redis: client,
+    limiter: Ratelimit.slidingWindow(API_RATE_LIMITS.pro, '1 m'),
+    prefix: 'rl:api',
+  })
+  return apiProLimiter
+}
+
+export async function checkApiRateLimit(userId: string, plan: Plan): Promise<RateLimitResult> {
+  const fallback = plan === 'free' ? fallbackApiFreeLimiter : fallbackApiProLimiter
+
+  const limiter = getApiLimiter(plan)
+  if (!limiter) {
+    return fallback.check(userId)
+  }
+
+  try {
+    const result = await limiter.limit(userId)
+    return {
+      success: result.success,
+      limit: result.limit,
+      remaining: result.remaining,
+      reset: result.reset,
+    }
+  } catch (error) {
+    log.error({ err: error, userId }, 'checkApiRateLimit failed, using in-memory fallback')
+    return fallback.check(userId)
   }
 }
