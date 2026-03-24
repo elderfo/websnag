@@ -2,19 +2,12 @@ import Link from 'next/link'
 import { Card } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { CopyButton } from '@/components/ui/copy-button'
+import { getWebhookUrl } from '@/lib/format'
 import type { Endpoint } from '@/types'
 
 interface EndpointCardProps {
   endpoint: Endpoint
   username: string | null
-}
-
-function getWebhookUrl(username: string | null, slug: string): string {
-  const baseUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000'
-  if (username) {
-    return `${baseUrl}/api/wh/${username}/${slug}`
-  }
-  return `${baseUrl}/api/wh/${slug}`
 }
 
 export function EndpointCard({ endpoint, username }: EndpointCardProps) {

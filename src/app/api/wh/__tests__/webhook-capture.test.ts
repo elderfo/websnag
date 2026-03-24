@@ -247,6 +247,7 @@ describe('handleWebhook (namespaced route /wh/[username]/[slug])', () => {
     mockFrom.mockImplementation((table: string) => {
       if (table === 'profiles') return profileChain
       if (table === 'endpoints') return endpointChain
+      if (table === 'subscriptions') return subscriptionChain
       return {}
     })
 
@@ -263,6 +264,7 @@ describe('handleWebhook (namespaced route /wh/[username]/[slug])', () => {
     mockFrom.mockImplementation((table: string) => {
       if (table === 'profiles') return profileChain
       if (table === 'endpoints') return endpointChain
+      if (table === 'subscriptions') return subscriptionChain
       return {}
     })
 
@@ -625,6 +627,7 @@ describe('handleWebhook (namespaced route /wh/[username]/[slug])', () => {
     mockFrom.mockImplementation((table: string) => {
       if (table === 'profiles') return bobProfileChain
       if (table === 'endpoints') return noEndpointChain
+      if (table === 'subscriptions') return subscriptionChain
       return {}
     })
 
@@ -888,6 +891,7 @@ describe('slug enumeration hardening (#10)', () => {
         mockFrom.mockImplementation((table: string) => {
           if (table === 'profiles') return profileChain
           if (table === 'endpoints') return chain
+          if (table === 'subscriptions') return subscriptionChain
           return {}
         })
         break
@@ -897,6 +901,7 @@ describe('slug enumeration hardening (#10)', () => {
         mockFrom.mockImplementation((table: string) => {
           if (table === 'profiles') return profileChain
           if (table === 'endpoints') return chain
+          if (table === 'subscriptions') return subscriptionChain
           return {}
         })
         break

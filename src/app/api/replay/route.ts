@@ -60,8 +60,14 @@ export async function POST(req: Request) {
 
     const { requestId, targetUrl } = parsed.data
 
-    // SSRF protection: validate the target URL does not resolve to internal addresses
-    const validation = await validateTargetUrl(targetUrl)
+    // Run URL validation and subscription check in parallel (both are lightweight)
+    // Request fetch is deferred until after authorization to avoid loading up to 1MB
+    // of body data for requests that will be rejected.
+    const [validation, subscriptionResult] = await Promise.all([
+      validateTargetUrl(targetUrl),
+      supabase.from('subscriptions').select('plan, status').eq('user_id', user.id).single(),
+    ])
+
     if (!validation.safe) {
       return NextResponse.json(
         { error: 'Target URL is not allowed', reason: validation.reason },
@@ -69,25 +75,19 @@ export async function POST(req: Request) {
       )
     }
 
-    // Verify user is Pro
-    const { data: subscription } = await supabase
-      .from('subscriptions')
-      .select('plan, status')
-      .eq('user_id', user.id)
-      .single()
-
-    const plan = getUserPlan(subscription)
+    if (subscriptionResult.error && subscriptionResult.error.code !== 'PGRST116') {
+      log.error({ err: subscriptionResult.error, userId: user.id }, 'subscription lookup failed')
+    }
+    const plan = getUserPlan(subscriptionResult.data)
     if (plan !== 'pro') {
       return NextResponse.json({ error: 'Replay is a Pro feature' }, { status: 403 })
     }
 
-    // Per-user API rate limit
     const rateLimit = await checkApiRateLimit(user.id, plan)
     if (!rateLimit.success) {
       return NextResponse.json({ error: 'Too many requests' }, { status: 429 })
     }
 
-    // Fetch the request and verify ownership
     const { data: webhookRequest } = await supabase
       .from('requests')
       .select('*, endpoint:endpoints!inner(user_id)')

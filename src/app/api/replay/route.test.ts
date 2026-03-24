@@ -397,6 +397,8 @@ describe('POST /api/replay', () => {
         safe: false,
         reason: 'Hostname "localhost" is not allowed',
       })
+      // Subscription runs in parallel with URL validation, but SSRF result is checked first
+      mockSingle.mockResolvedValueOnce({ data: { plan: 'free', status: 'active' } })
 
       const res = await POST(
         makeRequest({
@@ -407,8 +409,6 @@ describe('POST /api/replay', () => {
 
       // Should return 400 from SSRF check, not 403 from Pro check
       expect(res.status).toBe(400)
-      // The subscription query should NOT have been called
-      expect(mockSingle).not.toHaveBeenCalled()
     })
 
     it('includes reason in error response for all SSRF failures', async () => {

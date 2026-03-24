@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
+import { getUserPlan } from '@/lib/usage'
 import type { Plan } from '@/types'
 
 interface UsageData {
@@ -31,8 +32,7 @@ export function useUsage() {
         supabase.from('subscriptions').select('plan, status').eq('user_id', user.id).single(),
       ])
 
-      const plan: Plan =
-        subResult.data?.plan === 'pro' && subResult.data?.status === 'active' ? 'pro' : 'free'
+      const plan: Plan = getUserPlan(subResult.data)
 
       setUsage({
         requestCount: usageResult.data?.[0]?.request_count ?? 0,

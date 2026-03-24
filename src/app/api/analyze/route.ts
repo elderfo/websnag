@@ -32,25 +32,26 @@ export async function POST(req: Request) {
 
     const { requestId } = parsed.data
 
-    // Fetch the request and verify ownership via the inner join on endpoints
-    const { data: webhookRequest } = await supabase
-      .from('requests')
-      .select('*, endpoint:endpoints!inner(user_id)')
-      .eq('id', requestId)
-      .single()
+    // Fetch request + subscription in parallel (both only need user.id / requestId)
+    const [webhookRequestResult, subscriptionResult] = await Promise.all([
+      supabase
+        .from('requests')
+        .select('*, endpoint:endpoints!inner(user_id)')
+        .eq('id', requestId)
+        .single(),
+      supabase.from('subscriptions').select('plan, status').eq('user_id', user.id).single(),
+    ])
 
-    if (!webhookRequest) {
+    if (!webhookRequestResult.data) {
       return NextResponse.json({ error: 'Request not found' }, { status: 404 })
     }
 
-    // Check AI analysis usage limits (atomic check + increment to prevent race conditions)
-    const { data: subscription } = await supabase
-      .from('subscriptions')
-      .select('plan, status')
-      .eq('user_id', user.id)
-      .single()
+    const webhookRequest = webhookRequestResult.data
 
-    const plan = getUserPlan(subscription)
+    if (subscriptionResult.error && subscriptionResult.error.code !== 'PGRST116') {
+      log.error({ err: subscriptionResult.error, userId: user.id }, 'subscription lookup failed')
+    }
+    const plan = getUserPlan(subscriptionResult.data)
 
     // Per-user API rate limit
     const rateLimit = await checkApiRateLimit(user.id, plan)
