@@ -52,12 +52,5 @@ export const aiAnalysisSchema = z.object({
 })
 
 export const setUsernameSchema = z.object({
-  username: z
-    .string()
-    .min(3)
-    .max(32)
-    .regex(
-      /^[a-z0-9][a-z0-9-]{1,30}[a-z0-9]$/,
-      'Must be 3-32 chars, lowercase alphanumeric and hyphens, no leading/trailing hyphens'
-    ),
+  username: usernameSchema,
 })

@@ -69,6 +69,17 @@ function applyRateLimitHeaders(headers: Headers, rateLimitResult: RateLimitResul
   }
 }
 
+function rateLimitExceededResponse(result: RateLimitResult): NextResponse {
+  const retryAfterMs = Math.max(0, result.reset - Date.now())
+  const retryAfterSecs = Math.ceil(retryAfterMs / 1000)
+  const headers = new Headers({
+    'Retry-After': String(retryAfterSecs),
+    'X-RateLimit-Limit': String(result.limit),
+    'X-RateLimit-Remaining': String(result.remaining),
+  })
+  return NextResponse.json({ error: 'Rate limit exceeded' }, { status: 429, headers })
+}
+
 type BodyReadResult =
   | { status: 'ok'; body: string; sizeBytes: number }
   | { status: 'too_large'; sizeBytes: number }
@@ -216,35 +227,8 @@ async function handleWebhookCapture(
     if (ipResult) allRateLimitResults.push(ipResult)
     primaryResult = selectMostRestrictive(allRateLimitResults)
 
-    // Check slug rate limit
-    if (slugResult && !slugResult.success) {
-      const retryAfterMs = Math.max(0, slugResult.reset - Date.now())
-      const retryAfterSecs = Math.ceil(retryAfterMs / 1000)
-      const rlHeaders = new Headers({
-        'Retry-After': String(retryAfterSecs),
-        'X-RateLimit-Limit': String(slugResult.limit),
-        'X-RateLimit-Remaining': String(slugResult.remaining),
-      })
-      return NextResponse.json(
-        { error: 'Rate limit exceeded' },
-        { status: 429, headers: rlHeaders }
-      )
-    }
-
-    // Check IP rate limit
-    if (ipResult && !ipResult.success) {
-      const retryAfterMs = Math.max(0, ipResult.reset - Date.now())
-      const retryAfterSecs = Math.ceil(retryAfterMs / 1000)
-      const rlHeaders = new Headers({
-        'Retry-After': String(retryAfterSecs),
-        'X-RateLimit-Limit': String(ipResult.limit),
-        'X-RateLimit-Remaining': String(ipResult.remaining),
-      })
-      return NextResponse.json(
-        { error: 'Rate limit exceeded' },
-        { status: 429, headers: rlHeaders }
-      )
-    }
+    if (slugResult && !slugResult.success) return rateLimitExceededResponse(slugResult)
+    if (ipResult && !ipResult.success) return rateLimitExceededResponse(ipResult)
   } catch (error) {
     log.error({ err: error }, 'rate limiting check failed, using in-memory fallback')
     const slugResult = fallbackSlugCheck(slug)
@@ -254,33 +238,8 @@ async function handleWebhookCapture(
     if (ipResult) allRateLimitResults.push(ipResult)
     primaryResult = selectMostRestrictive(allRateLimitResults)
 
-    if (!slugResult.success) {
-      const retryAfterMs = Math.max(0, slugResult.reset - Date.now())
-      const retryAfterSecs = Math.ceil(retryAfterMs / 1000)
-      const rlHeaders = new Headers({
-        'Retry-After': String(retryAfterSecs),
-        'X-RateLimit-Limit': String(slugResult.limit),
-        'X-RateLimit-Remaining': String(slugResult.remaining),
-      })
-      return NextResponse.json(
-        { error: 'Rate limit exceeded' },
-        { status: 429, headers: rlHeaders }
-      )
-    }
-
-    if (ipResult && !ipResult.success) {
-      const retryAfterMs = Math.max(0, ipResult.reset - Date.now())
-      const retryAfterSecs = Math.ceil(retryAfterMs / 1000)
-      const rlHeaders = new Headers({
-        'Retry-After': String(retryAfterSecs),
-        'X-RateLimit-Limit': String(ipResult.limit),
-        'X-RateLimit-Remaining': String(ipResult.remaining),
-      })
-      return NextResponse.json(
-        { error: 'Rate limit exceeded' },
-        { status: 429, headers: rlHeaders }
-      )
-    }
+    if (!slugResult.success) return rateLimitExceededResponse(slugResult)
+    if (ipResult && !ipResult.success) return rateLimitExceededResponse(ipResult)
   }
 
   const supabase = createAdminClient()
@@ -302,13 +261,18 @@ async function handleWebhookCapture(
     return NextResponse.json({ error: 'Not found' }, { status: 404, headers: notFoundHeaders })
   }
 
-  // 3. Look up endpoint by user_id + slug
-  const { data: endpoint, error: endpointError } = await supabase
-    .from('endpoints')
-    .select('*')
-    .eq('user_id', profile.id)
-    .eq('slug', slug)
-    .single()
+  // 3. Look up endpoint + subscription in parallel (both only need profile.id)
+  const [endpointResult, subscriptionResult] = await Promise.all([
+    supabase
+      .from('endpoints')
+      .select('id, user_id, is_active, response_code, response_body, response_headers')
+      .eq('user_id', profile.id)
+      .eq('slug', slug)
+      .single(),
+    supabase.from('subscriptions').select('plan, status').eq('user_id', profile.id).single(),
+  ])
+
+  const { data: endpoint, error: endpointError } = endpointResult
 
   if (endpointError && endpointError.code !== 'PGRST116') {
     log.error({ err: endpointError, username, slug }, 'endpoint lookup failed')
@@ -329,13 +293,10 @@ async function handleWebhookCapture(
 
   // 4. Check usage limits and per-account rate limit BEFORE reading body
   //    to avoid consuming up to 1MB of data for requests that will be rejected.
-  const { data: subscription } = await supabase
-    .from('subscriptions')
-    .select('plan, status')
-    .eq('user_id', endpoint.user_id)
-    .single()
-
-  const plan = getUserPlan(subscription)
+  if (subscriptionResult.error && subscriptionResult.error.code !== 'PGRST116') {
+    log.error({ err: subscriptionResult.error, userId: profile.id }, 'subscription lookup failed')
+  }
+  const plan = getUserPlan(subscriptionResult.data)
 
   // 4b. Per-account rate limit (tier-aware, checked after plan resolution)
   try {
@@ -343,19 +304,7 @@ async function handleWebhookCapture(
     if (accountResult) {
       allRateLimitResults.push(accountResult)
 
-      if (!accountResult.success) {
-        const retryAfterMs = Math.max(0, accountResult.reset - Date.now())
-        const retryAfterSecs = Math.ceil(retryAfterMs / 1000)
-        const rlHeaders = new Headers({
-          'Retry-After': String(retryAfterSecs),
-          'X-RateLimit-Limit': String(accountResult.limit),
-          'X-RateLimit-Remaining': String(accountResult.remaining),
-        })
-        return NextResponse.json(
-          { error: 'Rate limit exceeded' },
-          { status: 429, headers: rlHeaders }
-        )
-      }
+      if (!accountResult.success) return rateLimitExceededResponse(accountResult)
     }
   } catch (error) {
     log.error(
@@ -365,19 +314,7 @@ async function handleWebhookCapture(
     const accountResult = fallbackAccountCheck(profile.id, plan)
     allRateLimitResults.push(accountResult)
 
-    if (!accountResult.success) {
-      const retryAfterMs = Math.max(0, accountResult.reset - Date.now())
-      const retryAfterSecs = Math.ceil(retryAfterMs / 1000)
-      const rlHeaders = new Headers({
-        'Retry-After': String(retryAfterSecs),
-        'X-RateLimit-Limit': String(accountResult.limit),
-        'X-RateLimit-Remaining': String(accountResult.remaining),
-      })
-      return NextResponse.json(
-        { error: 'Rate limit exceeded' },
-        { status: 429, headers: rlHeaders }
-      )
-    }
+    if (!accountResult.success) return rateLimitExceededResponse(accountResult)
   }
 
   // Select the most restrictive rate limit result across all active limiters

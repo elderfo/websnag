@@ -5,15 +5,11 @@ import { Badge } from '@/components/ui/badge'
 import { CopyButton } from '@/components/ui/copy-button'
 import { CodeSnippets } from '@/components/endpoints/code-snippets'
 import { RequestFeed } from '@/components/requests/request-feed'
+import { getWebhookUrl } from '@/lib/format'
 import type { Endpoint } from '@/types'
 
 interface EndpointDetailPageProps {
   params: Promise<{ id: string }>
-}
-
-function getWebhookUrl(username: string, slug: string): string {
-  const baseUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000'
-  return `${baseUrl}/api/wh/${username}/${slug}`
 }
 
 export default async function EndpointDetailPage({ params }: EndpointDetailPageProps) {

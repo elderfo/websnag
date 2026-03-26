@@ -1,3 +1,11 @@
+export function getWebhookUrl(username: string | null, slug: string): string {
+  const baseUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000'
+  if (username) {
+    return `${baseUrl}/api/wh/${username}/${slug}`
+  }
+  return `${baseUrl}/api/wh/${slug}`
+}
+
 export function formatBytes(bytes: number): string {
   if (bytes === 0) return '0 B'
   const k = 1024

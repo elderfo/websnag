@@ -209,6 +209,7 @@ export function RequestFeed({ endpointId, endpointUrl }: RequestFeedProps) {
         <div className="lg:w-3/5 min-h-[400px]">
           {selectedRequest ? (
             <RequestDetail
+              key={selectedRequest.id}
               request={selectedRequest}
               endpointUrl={endpointUrl}
               onDelete={(id) => setDeleteConfirm(id)}

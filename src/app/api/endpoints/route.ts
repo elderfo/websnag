@@ -48,28 +48,6 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    // Check user has a username set
-    const admin = createAdminClient()
-    const { data: profile, error: profileError } = await admin
-      .from('profiles')
-      .select('username')
-      .eq('id', user.id)
-      .single()
-
-    if (profileError && profileError.code !== 'PGRST116') {
-      log.error({ err: profileError }, 'POST profile query failed')
-      return NextResponse.json({ error: 'Failed to fetch profile' }, { status: 500 })
-    }
-
-    if (!profile?.username) {
-      return NextResponse.json(
-        {
-          error: 'You must set a username before creating endpoints. Visit settings to set one.',
-        },
-        { status: 400 }
-      )
-    }
-
     // Parse and validate request body
     let body: unknown
     try {
@@ -86,27 +64,39 @@ export async function POST(request: Request) {
       )
     }
 
-    // Get user's plan
-    const { data: subscription } = await supabase
-      .from('subscriptions')
-      .select('plan, status')
-      .eq('user_id', user.id)
-      .single()
+    // Fetch profile, subscription, and endpoint count in parallel
+    const admin = createAdminClient()
+    const [profileResult, subscriptionResult, countResult] = await Promise.all([
+      admin.from('profiles').select('username').eq('id', user.id).single(),
+      supabase.from('subscriptions').select('plan, status').eq('user_id', user.id).single(),
+      supabase.from('endpoints').select('*', { count: 'exact', head: true }).eq('user_id', user.id),
+    ])
 
-    const plan = getUserPlan(subscription)
+    if (profileResult.error && profileResult.error.code !== 'PGRST116') {
+      log.error({ err: profileResult.error }, 'POST profile query failed')
+      return NextResponse.json({ error: 'Failed to fetch profile' }, { status: 500 })
+    }
 
-    // Check endpoint limit
-    const { count, error: countError } = await supabase
-      .from('endpoints')
-      .select('*', { count: 'exact', head: true })
-      .eq('user_id', user.id)
+    if (!profileResult.data?.username) {
+      return NextResponse.json(
+        {
+          error: 'You must set a username before creating endpoints. Visit settings to set one.',
+        },
+        { status: 400 }
+      )
+    }
 
-    if (countError) {
-      log.error({ err: countError }, 'POST endpoint count query failed')
+    if (subscriptionResult.error && subscriptionResult.error.code !== 'PGRST116') {
+      log.error({ err: subscriptionResult.error, userId: user.id }, 'subscription lookup failed')
+    }
+    const plan = getUserPlan(subscriptionResult.data)
+
+    if (countResult.error) {
+      log.error({ err: countResult.error }, 'POST endpoint count query failed')
       return NextResponse.json({ error: 'Failed to check endpoint limit' }, { status: 500 })
     }
 
-    if (!canCreateEndpoint(count ?? 0, plan)) {
+    if (!canCreateEndpoint(countResult.count ?? 0, plan)) {
       return NextResponse.json(
         {
           error: `Endpoint limit reached. ${plan === 'free' ? 'Upgrade to Pro for unlimited endpoints.' : ''}`,
