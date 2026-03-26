@@ -86,6 +86,9 @@ export async function POST(request: Request) {
       )
     }
 
+    if (subscriptionResult.error && subscriptionResult.error.code !== 'PGRST116') {
+      log.error({ err: subscriptionResult.error, userId: user.id }, 'subscription lookup failed')
+    }
     const plan = getUserPlan(subscriptionResult.data)
 
     if (countResult.error) {
